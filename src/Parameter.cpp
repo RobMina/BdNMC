@@ -248,6 +248,16 @@ production_channel parse_production_channel(std::ifstream &instream, string &hol
             else if(key==max_meson_mom_key){
                 tmpprod.max_meson_mom=stod(val);
             }
+            else if(key==secondary_spectrum_key)
+                tmpprod.secondary_spectrum_file=val;
+            else if(key==z_production_start_key)
+                tmpprod.z_production_start=stod(val);
+            else if(key==z_production_end_key)
+                tmpprod.z_production_end=stod(val);
+            else if(key==target_Z_key)
+                tmpprod.target_Z=stod(val);
+            else if(key==target_A_key)
+                tmpprod.target_A=stod(val);
 			else{
 				line_num--;
 				break;

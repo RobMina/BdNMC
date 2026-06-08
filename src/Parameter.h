@@ -26,14 +26,19 @@ class production_channel{
 		std::string prod_chan, prod_dist, particle_list_file;
 		std::string sanfordwang_file;
 		std::string parton_V_n_file, parton_V_p_file,proton_pdf_file,neutron_pdf_file;
+		std::string secondary_spectrum_file;
 		//This map holds sanfordwang parameters.
 		std::map<std::string, std::string> dist_param_map;
 		double energy_bins, meson_per_pi0, PTMAX, PTMIN, QMIN, tolerance, ZMIN, ZMAX, num_per_pot,max_meson_mom;
+		double z_production_start = 0.0;
+		double z_production_end   = 0.0;
+		double target_Z = 26.0;
+		double target_A = 56.0;
 		bool particle_list_position;
 		production_channel();
 		bool query_dist_param(){return (dist_param_map.size()!=0);}
 		bool query_dist_param(const std::string &, double&);
-		bool par_list_pos(){return particle_list_position;} 
+		bool par_list_pos(){return particle_list_position;}
 		double Meson_Per_Pi0(){return meson_per_pi0;}
         double ptmin(){return PTMIN;}
 		double ptmax(){return PTMAX;}
@@ -51,6 +56,11 @@ class production_channel{
         std::string Proton_PDF_File(){return proton_pdf_file;}
         std::string Neutron_PDF_File(){return neutron_pdf_file;}
         std::string Production_Channel(){return prod_chan;}
+        std::string Secondary_Spectrum_File(){return secondary_spectrum_file;}
+        double Z_Production_Start(){return z_production_start;}
+        double Z_Production_End(){return z_production_end;}
+        double Target_Z(){return target_Z;}
+        double Target_A(){return target_A;}
 		std::shared_ptr<std::list<production_distribution> > Get_Dist_Mods_List(){return dist_mods;}
 		std::shared_ptr<std::list<production_distribution> > dist_mods;//Should probably be private
 };

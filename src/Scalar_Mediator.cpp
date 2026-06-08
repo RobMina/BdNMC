@@ -111,7 +111,7 @@ bool Scalar_Mediator::Prepare_Production_Channel(std::string prodchoice, std::st
         std::function<double(double, double)> sigma_brem = std::bind(&Scalar_Mediator::sigma_brem_differential,this,_1,_2);
 
         //Write a Generic distribution for use here. Production distribution is a function pointer to some pT,z distribution, production_fraction is the likelihood that a proton interacts with the target. Maybe default ot 1 if target details are missing. 
-        std::shared_ptr<Generic_Bremsstrahlung> pbd(new Generic_Bremsstrahlung(Scalar, par.Beam_Energy(), prodchan.ptmin(), prodchan.ptmax(),prodchan.zmin(),prodchan.zmax(), "Dark_Bremsstrahlung", sigma_brem));
+        std::shared_ptr<Generic_Bremsstrahlung> pbd(new Generic_Bremsstrahlung(Scalar, par.Beam_Energy(), MASS_PROTON, prodchan.ptmin(), prodchan.ptmax(),prodchan.zmin(),prodchan.zmax(), "Dark_Bremsstrahlung", sigma_brem));
 
         Vnum = pbd->Prod_Rate()/sig_tot*par.Protons_on_Target()*production_fraction;
 

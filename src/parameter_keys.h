@@ -69,6 +69,12 @@ const string min_event_key = "min_event";
 
 const string kinetic_energy_cut_key = "kinetic_energy_cut";
 
+const string secondary_spectrum_key   = "secondary_spectrum_file";
+const string z_production_start_key   = "z_production_start";
+const string z_production_end_key     = "z_production_end";
+const string target_Z_key             = "target_Z";
+const string target_A_key             = "target_A";
+
 
 vector<string> spherearr = {"radius","x-position","y-position","z-position"};
 vector<string> cylinderarr = {"radius","length","x-position","y-position","z-position","det-theta","det-phi"};

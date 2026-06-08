@@ -11,10 +11,11 @@
 using std::endl;
 using std::cout;
 
-Generic_Bremsstrahlung::Generic_Bremsstrahlung(Particle& brem_product, double Beam_energy, double Ptmin, double Ptmax, double Zmin, double Zmax, std::string prodchoice, std::function<double(double, double)> dist){
+Generic_Bremsstrahlung::Generic_Bremsstrahlung(Particle& brem_product, double Beam_energy, double Parent_mass, double Ptmin, double Ptmax, double Zmin, double Zmax, std::string prodchoice, std::function<double(double, double)> dist){
 
 	product = brem_product;
 	beam_energy = Beam_energy;
+	parent_mass = Parent_mass;
 	ZMIN=Zmin;
 	ZMAX=Zmax;
 	PTMIN=Ptmin;
@@ -85,7 +86,7 @@ void Generic_Bremsstrahlung::sample_particle(Particle &part){
 		}
 	}
 	double phi = Random::Flat(0,2*pi);
-	double pz = sqrt(pow(beam_energy,2)-pow(MASS_PROTON,2))*z;
+	double pz = sqrt(pow(beam_energy,2)-pow(parent_mass,2))*z;
 	double theta=atan2(pt,pz);
 	double pmom = sqrt(pz*pz+pt*pt);
 

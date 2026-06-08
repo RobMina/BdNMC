@@ -230,7 +230,7 @@ class Three_Body_Decay_Gen: public DMGenerator{
 
 class Generic_Bremsstrahlung: public DMGenerator{
     public:
-        Generic_Bremsstrahlung(Particle& product, double beam_energy, double ptmin, double ptmax, double zmin, double zmax, std::string prodchoice, std::function<double(double, double)>);
+        Generic_Bremsstrahlung(Particle& product, double beam_energy, double parent_mass, double ptmin, double ptmax, double zmin, double zmax, std::string prodchoice, std::function<double(double, double)>);
         void Toggle_Decay(std::shared_ptr<DMGenerator> decay_gen);
         bool GenDM(std::list<Particle>& vec, std::function<double(Particle&)> det_int, Particle& part);
         void calc_prod_rate();
@@ -238,7 +238,7 @@ class Generic_Bremsstrahlung: public DMGenerator{
         void sample_particle(Particle &part);
         double Prod_Rate(){return prod_rate;}
     private:
-        double beam_energy, prod_rate;
+        double beam_energy, parent_mass, prod_rate;
         //This holds a sample version of the particle produced through brem.
         Particle product;
         double ZMIN, ZMAX, PTMIN, PTMAX;

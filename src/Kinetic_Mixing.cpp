@@ -6,6 +6,7 @@
 #include "Model.h"
 #include "Distribution.h"
 #include "Proton_Brem_Distribution.h"
+#include "Lepton_Brem_Distribution.h"
 #include "Position_Distributions.h"
 #include "branchingratios.h"
 #include "Scatter.h"
@@ -205,6 +206,29 @@ bool Kinetic_Mixing::Prepare_Production_Channel(std::string prodchoice, std::str
         }
 		DMGen = std::shared_ptr<DMGenerator>(new piminus_capture_gen(mass_dp,mass_dm,epsilon,alpha_D));
         Vnum = DMGen->BranchingRatio()*par.Pi0_per_POT()*par.Protons_on_Target();
+        return true;
+    }
+    else if(prodchoice=="muon_brem"){
+        if(prodchan.Secondary_Spectrum_File().empty()){
+            cerr << "muon_brem requires secondary_spectrum_file in the parameter file\n";
+            return false;
+        }
+        if(prodchan.ptmax() <= 0 || prodchan.zmax() <= 0 || prodchan.zmax() <= prodchan.zmin() || prodchan.zmin() < 0){
+            cerr << "Invalid ptmax/zmin/zmax for muon_brem production channel\n";
+            return false;
+        }
+        Dist->set_mass(mass_dp);
+        std::shared_ptr<Lepton_Brem_Distribution> lbd(new Lepton_Brem_Distribution(
+            MASS_MUON, mass_dp, epsilon, alpha_D,
+            prodchan.Secondary_Spectrum_File(),
+            prodchan.Target_Z(), prodchan.Target_A(),
+            prodchan.ptmax(), prodchan.zmax(), prodchan.zmin(),
+            prodchan.Z_Production_Start(),
+            prodchan.ptmin()
+        ));
+        DMGen = std::shared_ptr<DMGenerator>(new V_decay_gen(mass_dp, mass_dm, epsilon, alpha_D, prodchoice));
+        Vnum = lbd->V_prod_rate() * par.Protons_on_Target();
+        Dist->Add_Dist(lbd);
         return true;
     }
 	return false;

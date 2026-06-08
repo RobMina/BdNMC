@@ -94,6 +94,9 @@ bool Model::Prepare_Production_Distribution(std::string prodchoice, std::string 
     if(proddist=="proton_beam" || proddist=="proton_brem" || proddist=="proton_brem_baryonic"){
         Dist = std::shared_ptr<Distribution>(new BeamDistribution(par.Beam_Energy(),MASS_PROTON));
     }
+    else if(proddist=="muon_brem"){
+        Dist = std::shared_ptr<Distribution>(new BeamDistribution(par.Beam_Energy(),MASS_MUON));
+    }
     else if(proddist=="burmansmith"){
         std::shared_ptr<BurmanSmith> bs(new BurmanSmith(par.Beam_Energy(),par.Target_P_Num()));
         //beam_energy should be kinetic energy for this case
