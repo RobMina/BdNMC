@@ -1,0 +1,5 @@
+build/
+bin/BDNMC
+data/muon_flux_numi.csv
+*.o
+*.dat
