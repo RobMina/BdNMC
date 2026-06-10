@@ -163,10 +163,14 @@ production_channel::production_channel(){
     tolerance=5e-2;
     energy_bins=100;
     QMIN=1.3;
-    max_meson_mom=-1;
-    num_per_pot=0;
-	dist_mods = std::unique_ptr<list<production_distribution> > (new list<production_distribution>);
-}
+	    max_meson_mom=-1;
+	    num_per_pot=0;
+	    spectrum_prune_fraction=1.0e-8;
+	    brem_table_pt_power=3.0;
+	    brem_table_x_bins=72;
+	    brem_table_pt_bins=72;
+		dist_mods = std::unique_ptr<list<production_distribution> > (new list<production_distribution>);
+	}
 
 string lowercase(const string &str){
 	std::locale loc;
@@ -252,12 +256,22 @@ production_channel parse_production_channel(std::ifstream &instream, string &hol
                 tmpprod.secondary_spectrum_file=val;
             else if(key==z_production_start_key)
                 tmpprod.z_production_start=stod(val);
-            else if(key==z_production_end_key)
-                tmpprod.z_production_end=stod(val);
-            else if(key==target_Z_key)
-                tmpprod.target_Z=stod(val);
+	            else if(key==z_production_end_key)
+	                tmpprod.z_production_end=stod(val);
+	            else if(key==spectrum_prune_fraction_key)
+	                tmpprod.spectrum_prune_fraction=stod(val);
+	            else if(key==brem_table_x_bins_key)
+	                tmpprod.brem_table_x_bins=stoi(val);
+	            else if(key==brem_table_pt_bins_key)
+	                tmpprod.brem_table_pt_bins=stoi(val);
+	            else if(key==brem_table_pt_power_key)
+	                tmpprod.brem_table_pt_power=stod(val);
+	            else if(key==target_Z_key)
+	                tmpprod.target_Z=stod(val);
             else if(key==target_A_key)
                 tmpprod.target_A=stod(val);
+            else if(key==target_n_density_key)
+                tmpprod.target_n_density=stod(val);
 			else{
 				line_num--;
 				break;

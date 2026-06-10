@@ -221,11 +221,17 @@ bool Kinetic_Mixing::Prepare_Production_Channel(std::string prodchoice, std::str
         std::shared_ptr<Lepton_Brem_Distribution> lbd(new Lepton_Brem_Distribution(
             MASS_MUON, mass_dp, epsilon, alpha_D,
             prodchan.Secondary_Spectrum_File(),
-            prodchan.Target_Z(), prodchan.Target_A(),
-            prodchan.ptmax(), prodchan.zmax(), prodchan.zmin(),
-            prodchan.Z_Production_Start(),
-            prodchan.ptmin()
-        ));
+	            prodchan.Target_Z(), prodchan.Target_A(),
+	            prodchan.Target_N_Dens(),
+	            prodchan.ptmax(), prodchan.zmax(), prodchan.zmin(),
+	            prodchan.Z_Production_Start(),
+	            prodchan.Z_Production_End(),
+	            prodchan.Spectrum_Prune_Fraction(),
+	            prodchan.Brem_Table_X_Bins(),
+	            prodchan.Brem_Table_Pt_Bins(),
+	            prodchan.ptmin(),
+	            prodchan.Brem_Table_Pt_Power()
+	        ));
         DMGen = std::shared_ptr<DMGenerator>(new V_decay_gen(mass_dp, mass_dm, epsilon, alpha_D, prodchoice));
         Vnum = lbd->V_prod_rate() * par.Protons_on_Target();
         Dist->Add_Dist(lbd);

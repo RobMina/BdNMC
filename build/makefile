@@ -26,7 +26,19 @@ test_exact: ../src/test_exact.cpp Lepton_Brem_Distribution.o Particle.o Random.o
 	$(CXX) $(CXXFLAGS) -c -o test_exact.o ../src/test_exact.cpp
 	$(CXX) $(CXXFLAGS) -o test_exact test_exact.o Lepton_Brem_Distribution.o Particle.o Random.o Integrator.o BeamDistribution.o Kinematics.o minimization.o
 
-#main : $(OBJ)
+test_table_interp: ../src/test_table_interp.cpp Lepton_Brem_Distribution.o Particle.o Random.o Integrator.o BeamDistribution.o Kinematics.o minimization.o
+	$(CXX) $(CXXFLAGS) -c -o test_table_interp.o ../src/test_table_interp.cpp
+	$(CXX) $(CXXFLAGS) -o test_table_interp test_table_interp.o Lepton_Brem_Distribution.o Particle.o Random.o Integrator.o BeamDistribution.o Kinematics.o minimization.o
+
+test_muon_brem_sigma: ../src/test_muon_brem_sigma.cpp Lepton_Brem_Distribution.o Particle.o Random.o Integrator.o BeamDistribution.o Kinematics.o minimization.o
+	$(CXX) $(CXXFLAGS) -c -o test_muon_brem_sigma.o ../src/test_muon_brem_sigma.cpp
+	$(CXX) $(CXXFLAGS) -o test_muon_brem_sigma test_muon_brem_sigma.o Lepton_Brem_Distribution.o Particle.o Random.o Integrator.o BeamDistribution.o Kinematics.o minimization.o
+
+test_muon_brem_norm: ../src/test_muon_brem_norm.cpp Lepton_Brem_Distribution.o Particle.o Random.o Integrator.o BeamDistribution.o Kinematics.o minimization.o
+	$(CXX) $(CXXFLAGS) -c -o test_muon_brem_norm.o ../src/test_muon_brem_norm.cpp
+	$(CXX) $(CXXFLAGS) -o test_muon_brem_norm test_muon_brem_norm.o Lepton_Brem_Distribution.o Particle.o Random.o Integrator.o BeamDistribution.o Kinematics.o minimization.o
+
+	#main : $(OBJ)
 #	$(CXX) $(CXXFLAGS) -o $@ $^
 
 main : $(OBJ)

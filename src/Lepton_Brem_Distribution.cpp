@@ -14,8 +14,11 @@
 #include <iostream>
 #include <algorithm>
 #include <numeric>
+#include <cstddef>
+#include <cstdint>
 #include <stdexcept>
 #include <functional>
+#include <unordered_map>
 
 using std::cout;
 using std::cerr;
@@ -102,29 +105,47 @@ void unit_perp_basis(const double vh[3], double e1[3], double e2[3]) {
     // e2 is already unit (|v_hat| = |e1| = 1, v_hat ⊥ e1)
 }
 
+inline std::uint64_t energy_cache_key(double energy_gev) {
+    return static_cast<std::uint64_t>(std::llround(energy_gev * 1.0e9));
+}
+
 } // anonymous namespace
 
 // ---------------------------------------------------------------------------
 // Constructors
 // ---------------------------------------------------------------------------
 Lepton_Brem_Distribution::Lepton_Brem_Distribution(
-        double parent_mass_, double mA_, double epsilon_, double alphaD_,
-        const std::string& spectrum_file,
-        double target_Z_, double target_A_,
-        double ptmax, double zmax, double zmin,
-        double z_production_start,
-        double ptmin)
-    : parent_mass(parent_mass_), mA(mA_), epsilon(epsilon_), alphaD(alphaD_),
-      ZMIN(zmin), ZMAX(zmax), PTMIN(ptmin), PTMAX(ptmax),
-      target_Z(target_Z_), target_A(target_A_),
-      target_mass(target_A_ * AMU_GEV),
-      vprodrate(0.0), pmax(0.0)
+	        double parent_mass_, double mA_, double epsilon_, double alphaD_,
+	        const std::string& spectrum_file,
+	        double target_Z_, double target_A_, double target_n_density_,
+	        double ptmax, double zmax, double zmin,
+	        double z_production_start,
+	        double z_production_end,
+	        double spectrum_prune_fraction_,
+	        int table_x_bins_,
+	        int table_pt_bins_,
+	        double ptmin,
+	        double table_pt_power_)
+	    : parent_mass(parent_mass_), mA(mA_), epsilon(epsilon_), alphaD(alphaD_),
+	      ZMIN(zmin), ZMAX(zmax), PTMIN(ptmin), PTMAX(ptmax),
+	      target_Z(target_Z_), target_A(target_A_),
+	      target_mass(target_A_ * AMU_GEV),
+	      target_n_density(target_n_density_),
+	      vprodrate(0.0), pmax(0.0),
+	      spectrum_prune_fraction(std::max(0.0, spectrum_prune_fraction_)),
+	      table_pt_power(std::max(1.0, table_pt_power_)),
+	      table_x_bins(std::max(1, table_x_bins_)),
+	      table_pt_bins(std::max(1, table_pt_bins_))
 {
-    a_screen = 111.0 * std::pow(target_Z, -1.0/3.0) / me;
-    d_param  = 0.164  * std::pow(target_A, -2.0/3.0);
-    set_mass(mA);
-    load_spectrum(spectrum_file, z_production_start);
-    calc_prod_rate();
+	    a_screen = 111.0 * std::pow(target_Z, -1.0/3.0) / me;
+	    d_param  = 0.164  * std::pow(target_A, -2.0/3.0);
+	    set_mass(mA);
+	    if (target_n_density <= 0.0) {
+	        cerr << "Lepton_Brem_Distribution: WARNING - target_n_density <= 0; "
+	             << "vprodrate will be zero\n";
+	    }
+	    load_spectrum(spectrum_file, z_production_start, z_production_end);
+	    calc_prod_rate();
 }
 
 // Validation constructor: no spectrum file.
@@ -133,10 +154,13 @@ Lepton_Brem_Distribution::Lepton_Brem_Distribution(
         double target_Z_, double target_A_,
         double zmin, double zmax, double ptmin, double ptmax)
     : parent_mass(parent_mass_), mA(mA_), epsilon(epsilon_), alphaD(alphaD_),
-      ZMIN(zmin), ZMAX(zmax), PTMIN(ptmin), PTMAX(ptmax),
-      target_Z(target_Z_), target_A(target_A_),
-      target_mass(target_A_ * AMU_GEV),
-      vprodrate(0.0), pmax(0.0)
+	      ZMIN(zmin), ZMAX(zmax), PTMIN(ptmin), PTMAX(ptmax),
+	      target_Z(target_Z_), target_A(target_A_),
+	      target_mass(target_A_ * AMU_GEV),
+	      target_n_density(0.0),
+	      vprodrate(0.0), pmax(0.0), spectrum_prune_fraction(0.0),
+	      table_pt_power(3.0),
+	      table_x_bins(72), table_pt_bins(72)
 {
     a_screen = 111.0 * std::pow(target_Z, -1.0/3.0) / me;
     d_param  = 0.164  * std::pow(target_A, -2.0/3.0);
@@ -375,89 +399,294 @@ double Lepton_Brem_Distribution::d2N_lepton_brem(double x, double pT, double E_p
 // ---------------------------------------------------------------------------
 // load_spectrum
 // ---------------------------------------------------------------------------
-void Lepton_Brem_Distribution::load_spectrum(const std::string& path, double z_start) {
-    std::ifstream infile(path);
-    if (!infile.is_open())
-        throw std::runtime_error("Lepton_Brem_Distribution: cannot open spectrum file: " + path);
+namespace {
 
-    std::string line;
-    while (std::getline(infile, line)) {
-        if (line.empty() || line[0] == '#' || line[0] == 'z' || line[0] == 'Z') continue;
-        double zm, dzm, Egev, rate;
-        {
-            std::istringstream ss(line);
-            char comma;
-            if (!(ss >> zm >> comma >> dzm >> comma >> Egev >> comma >> rate)) {
-                std::istringstream ss2(line);
-                if (!(ss2 >> zm >> dzm >> Egev >> rate)) continue;
-            }
-        }
-        bool accept = (z_start <= 0.0) || (std::abs(zm - z_start) < 0.01);
-        if (accept && Egev > parent_mass && rate > 0.0)
-            spectrum.push_back({zm, dzm, Egev, rate * dzm});
+struct RawSpectrumRow {
+    double z_m, dz_m, E_gev, dN_per_POT_per_GeV, dE_gev;
+    bool has_dE;
+};
+
+bool z_row_accepted(double zm, double dzm, double z_start, double z_end) {
+    if (z_start <= 0.0) return true;
+    if (z_end > z_start) {
+        const double row_start = zm;
+        const double row_end = zm + std::max(0.0, dzm);
+        return (row_start < z_end) && (row_end > z_start);
     }
+    return std::abs(zm - z_start) < 0.01;
+}
 
-    if (spectrum.empty())
-        cerr << "Lepton_Brem_Distribution: WARNING - no spectrum rows loaded from "
-             << path << " (z_start=" << z_start << ")\n";
+void assign_energy_bin_widths(std::vector<RawSpectrumRow>& rows) {
+    std::vector<size_t> order(rows.size());
+    std::iota(order.begin(), order.end(), 0);
+    std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+        if (rows[a].z_m != rows[b].z_m) return rows[a].z_m < rows[b].z_m;
+        if (rows[a].dz_m != rows[b].dz_m) return rows[a].dz_m < rows[b].dz_m;
+        return rows[a].E_gev < rows[b].E_gev;
+    });
+
+    size_t group_start = 0;
+    while (group_start < order.size()) {
+        size_t group_end = group_start + 1;
+        while (group_end < order.size()
+               && rows[order[group_end]].z_m == rows[order[group_start]].z_m
+               && rows[order[group_end]].dz_m == rows[order[group_start]].dz_m) {
+            ++group_end;
+        }
+
+        for (size_t gi = group_start; gi < group_end; ++gi) {
+            RawSpectrumRow& row = rows[order[gi]];
+            if (row.has_dE && row.dE_gev > 0.0) continue;
+
+            const size_t idx = gi - group_start;
+            const size_t group_size = group_end - group_start;
+            if (group_size == 1) {
+                row.dE_gev = 1.0;
+                row.has_dE = true;
+                continue;
+            }
+
+            const double E = row.E_gev;
+            const double E_prev = rows[order[group_start + idx - 1]].E_gev;
+            const double E_next = rows[order[group_start + idx + 1]].E_gev;
+            if (idx == 0) {
+                row.dE_gev = rows[order[group_start + 1]].E_gev - E;
+            } else if (idx + 1 == group_size) {
+                row.dE_gev = E - E_prev;
+            } else {
+                row.dE_gev = 0.5 * (E_next - E_prev);
+            }
+            row.has_dE = true;
+        }
+
+        group_start = group_end;
+    }
+}
+
+} // namespace
+
+void Lepton_Brem_Distribution::load_spectrum(const std::string& path, double z_start, double z_end) {
+	    std::ifstream infile(path);
+	    if (!infile.is_open())
+	        throw std::runtime_error("Lepton_Brem_Distribution: cannot open spectrum file: " + path);
+
+	    std::vector<RawSpectrumRow> raw_rows;
+	    int rows_seen = 0;
+	    std::string line;
+	    while (std::getline(infile, line)) {
+	        if (line.empty() || line[0] == '#' || line[0] == 'z' || line[0] == 'Z') continue;
+	        double zm = 0.0, dzm = 0.0, Egev = 0.0, rate = 0.0, dE = 0.0;
+	        bool parsed = false;
+	        bool has_dE = false;
+	        {
+	            std::istringstream ss(line);
+	            char comma = ',';
+	            if (ss >> zm >> comma >> dzm >> comma >> Egev >> comma >> rate >> comma >> dE) {
+	                parsed = true;
+	                has_dE = true;
+	            }
+	        }
+	        if (!parsed) {
+	            std::istringstream ss2(line);
+	            if (!(ss2 >> zm >> dzm >> Egev >> rate)) continue;
+	            parsed = true;
+	        }
+	        rows_seen++;
+	        if (!z_row_accepted(zm, dzm, z_start, z_end)) continue;
+	        if (Egev <= parent_mass || rate <= 0.0) continue;
+	        raw_rows.push_back({zm, dzm, Egev, rate, dE, has_dE});
+	    }
+
+	    assign_energy_bin_widths(raw_rows);
+
+	    int rows_selected = 0;
+	    for (const auto& raw : raw_rows) {
+	        if (raw.dE_gev <= 0.0) continue;
+	        spectrum.push_back({raw.z_m, raw.dz_m, raw.E_gev, raw.dN_per_POT_per_GeV, raw.dE_gev});
+	        rows_selected++;
+	    }
+
+	    if (spectrum.empty())
+	        cerr << "Lepton_Brem_Distribution: WARNING - no spectrum rows loaded from "
+	             << path << " (z_start=" << z_start << ", z_end=" << z_end << ")\n";
+	    else
+	        cout << "Lepton_Brem_Distribution: loaded " << rows_selected
+	             << " / " << rows_seen << " spectrum rows"
+	             << " (z_start=" << z_start << ", z_end=" << z_end << ")" << endl;
 }
 
 // ---------------------------------------------------------------------------
 // calc_prod_rate
 // ---------------------------------------------------------------------------
-void Lepton_Brem_Distribution::calc_prod_rate() {
-    vprodrate = 0.0;
-    pmax_per_row.clear();
-    cum_weight.clear();
+void Lepton_Brem_Distribution::build_sampling_table(
+        const SpectrumRow& row, std::vector<double>& grid_values,
+        std::vector<double>& cell_cdf, double& integral) const {
+    grid_values.clear();
+    cell_cdf.clear();
+    grid_values.resize((table_x_bins + 1) * (table_pt_bins + 1), 0.0);
+    cell_cdf.reserve(table_x_bins * table_pt_bins);
+    integral = 0.0;
 
-    if (spectrum.empty() || ZMIN >= ZMAX) return;
+    const double dx = (ZMAX - ZMIN) / table_x_bins;
+    const double dpt = (PTMAX - PTMIN) / table_pt_bins;
+    if (dx <= 0.0 || dpt <= 0.0) return;
 
-    double cumulative = 0.0;
-    for (const auto& row : spectrum) {
-        double E = row.E_gev;
-        auto f2d = [this, E](double x, double pt) {
-            return this->d2N_lepton_brem(x, pt, E);
-        };
-        std::function<double(double,double)> f2d_fn = f2d;
-
-        // Coarse grid probe: find envelope maximum and check for any non-zero value.
-        // This must run before the cubature to avoid the 0/0 convergence loop in
-        // SimpsonCubature_adapt when the integrand is identically zero.
-        double pm = 0.0;
-        const int Nx = 8, Np = 8;
-        for (int ix = 0; ix <= Nx; ++ix) {
-            double x = ZMIN + (ZMAX - ZMIN) * ix / Nx;
-            for (int ip = 0; ip <= Np; ++ip) {
-                double pt = PTMIN + (PTMAX - PTMIN) * ip / Np;
-                double v = d2N_lepton_brem(x, pt, E);
-                if (v > pm) pm = v;
-            }
+    for (int ix = 0; ix <= table_x_bins; ++ix) {
+        const double x = ZMIN + ix * dx;
+        for (int ip = 0; ip <= table_pt_bins; ++ip) {
+            const double pt = pt_grid_value(ip);
+            const double value = d2N_lepton_brem(x, pt, row.E_gev);
+            grid_values[ix * (table_pt_bins + 1) + ip] =
+                (value > 0.0 && std::isfinite(value)) ? value : 0.0;
         }
-        pmax_per_row.push_back(pm > 0.0 ? pm * 2.0 : 1e-300);
-
-        double integral = 0.0;
-        if (PTMIN < PTMAX && pm > 0.0)
-            integral = SimpsonCubature_adapt(f2d_fn, ZMIN, ZMAX, 30, PTMIN, PTMAX, 30, 0.02);
-
-        double row_contrib = row.weight * integral;
-        vprodrate += row_contrib;
-
-        cumulative += row_contrib;
-        cum_weight.push_back(cumulative);
     }
 
-    if (vprodrate > 0.0)
-        pmax = *std::max_element(pmax_per_row.begin(), pmax_per_row.end());
+    for (int ix = 0; ix < table_x_bins; ++ix) {
+        for (int ip = 0; ip < table_pt_bins; ++ip) {
+            const int row_stride = table_pt_bins + 1;
+            const double pt_lo = pt_grid_value(ip);
+            const double pt_hi = pt_grid_value(ip + 1);
+            const double f00 = grid_values[ix * row_stride + ip];
+            const double f10 = grid_values[(ix + 1) * row_stride + ip];
+            const double f01 = grid_values[ix * row_stride + ip + 1];
+            const double f11 = grid_values[(ix + 1) * row_stride + ip + 1];
+            const double cell_weight =
+                0.25 * (f00 + f10 + f01 + f11) * dx * (pt_hi * pt_hi - pt_lo * pt_lo);
+            integral += cell_weight;
+            cell_cdf.push_back(integral);
+        }
+    }
+}
 
-    cout << "Lepton_Brem_Distribution: vprodrate = " << vprodrate
-         << "  (rows=" << spectrum.size() << ")" << endl;
+double Lepton_Brem_Distribution::pt_grid_value(int index) const {
+    const double frac = static_cast<double>(index) / table_pt_bins;
+    return PTMIN + (PTMAX - PTMIN) * std::pow(frac, table_pt_power);
+}
+
+double Lepton_Brem_Distribution::integrated_cross_section_for_energy(double E) const {
+    if (E * ZMAX <= mA || ZMIN >= ZMAX) return 0.0;
+    static thread_local std::unordered_map<std::uint64_t, double> integral_cache;
+    const std::uint64_t key = energy_cache_key(E);
+    const auto found = integral_cache.find(key);
+    if (found != integral_cache.end()) {
+        return found->second;
+    }
+    SpectrumRow row{0.0, 0.0, E, 0.0, 0.0};
+    std::vector<double> grid_values;
+    std::vector<double> cell_cdf;
+    double integral = 0.0;
+    build_sampling_table(row, grid_values, cell_cdf, integral);
+    integral_cache.emplace(key, integral);
+    return integral;
+}
+
+void Lepton_Brem_Distribution::calc_prod_rate() {
+	    vprodrate = 0.0;
+	    energy_tables.clear();
+	    table_index_per_row.clear();
+	    cum_weight.clear();
+
+	    if (spectrum.empty() || ZMIN >= ZMAX) return;
+
+	    struct RowEstimate {
+	        SpectrumRow row;
+	        int table_index;
+	        double contribution;
+	    };
+
+	    std::vector<RowEstimate> estimates;
+	    estimates.reserve(spectrum.size());
+
+	    int pruned_kinematic = 0;
+	    int pruned_rough = 0;
+	    int pruned_zero = 0;
+	    double integral_total = 0.0;
+	    std::unordered_map<std::uint64_t, int> energy_table_index;
+	    energy_table_index.reserve(spectrum.size() / 8 + 1);
+
+	    for (const auto& row : spectrum) {
+	        double E = row.E_gev;
+	        if (E * ZMAX <= mA) {
+	            pruned_kinematic++;
+	            continue;
+	        }
+
+	        const std::uint64_t key = energy_cache_key(E);
+	        std::unordered_map<std::uint64_t, int>::iterator cache_it =
+	            energy_table_index.find(key);
+	        if (cache_it == energy_table_index.end()) {
+	            SamplingTable fresh;
+	            SpectrumRow energy_row{0.0, 0.0, E, 0.0, 0.0};
+	            build_sampling_table(
+	                energy_row,
+	                fresh.grid_values,
+	                fresh.cell_cdf,
+	                fresh.integral);
+	            const int table_idx = static_cast<int>(energy_tables.size());
+	            energy_tables.push_back(std::move(fresh));
+	            cache_it = energy_table_index.insert(
+	                std::make_pair(key, table_idx)).first;
+	        }
+	        const SamplingTable& cached = energy_tables[cache_it->second];
+	        if (cached.integral <= 0.0) {
+	            pruned_zero++;
+	            continue;
+	        }
+
+	        const double contribution =
+	            row.dN_per_POT_per_GeV * row.dE_gev
+	            * target_n_density
+	            * (row.dz_m * m_to_cm)
+	            * cached.integral
+	            * convGeV2cm2;
+	        if (contribution <= 0.0) {
+	            pruned_zero++;
+	            continue;
+	        }
+
+	        integral_total += contribution;
+	        estimates.push_back({row, cache_it->second, contribution});
+	    }
+
+	    spectrum.clear();
+	    if (estimates.empty() || integral_total <= 0.0) {
+	        cout << "Lepton_Brem_Distribution: vprodrate = 0"
+	             << "  (rows=0, pruned_kinematic=" << pruned_kinematic
+	             << ", pruned_zero=" << pruned_zero << ")" << endl;
+	        return;
+	    }
+
+	    double cumulative = 0.0;
+	    for (const auto& estimate : estimates) {
+	        if (estimate.contribution <= 0.0) continue;
+	        if (spectrum_prune_fraction > 0.0
+	            && estimate.contribution < spectrum_prune_fraction * integral_total) {
+	            pruned_rough++;
+	            continue;
+	        }
+
+	        spectrum.push_back(estimate.row);
+	        table_index_per_row.push_back(estimate.table_index);
+	        vprodrate += estimate.contribution;
+	        cumulative += estimate.contribution;
+	        cum_weight.push_back(cumulative);
+	    }
+
+	    cout << "Lepton_Brem_Distribution: vprodrate = " << vprodrate
+	         << "  (rows=" << spectrum.size()
+	         << ", table=" << table_x_bins << "x" << table_pt_bins
+	         << ", pt_power=" << table_pt_power
+	         << ", unique_E_tables=" << energy_tables.size()
+	         << ", pruned_kinematic=" << pruned_kinematic
+	         << ", pruned_negligible=" << pruned_rough
+	         << ", pruned_zero=" << pruned_zero << ")" << endl;
 }
 
 // ---------------------------------------------------------------------------
 // sample_particle
 // ---------------------------------------------------------------------------
 void Lepton_Brem_Distribution::sample_particle(Particle& part) {
-    if (spectrum.empty()) return;
+	    if (spectrum.empty()) return;
 
     // Step 1: sample row
     double u1 = Random::Flat(0.0, cum_weight.back());
@@ -465,24 +694,51 @@ void Lepton_Brem_Distribution::sample_particle(Particle& part) {
         std::lower_bound(cum_weight.begin(), cum_weight.end(), u1) - cum_weight.begin());
     if (idx >= static_cast<int>(spectrum.size())) idx = spectrum.size() - 1;
 
-    const SpectrumRow& row = spectrum[idx];
-    double E_parent = row.E_gev;
-    double z_vertex = row.z_m + Random::Flat(0.0, row.dz_m);
+	    const SpectrumRow& row = spectrum[idx];
+	    double E_parent = row.E_gev;
+	    double z_vertex = row.z_m + Random::Flat(0.0, row.dz_m);
 
-    // Step 2: rejection sample (x, pT)
-    double row_pmax = pmax_per_row[idx];
-    double x, pT, hold;
-    int attempts = 0;
-    while (true) {
-        x  = Random::Flat(ZMIN, ZMAX);
-        pT = Random::Flat(PTMIN, PTMAX);
-        hold = d2N_lepton_brem(x, pT, E_parent);
-        if (hold >= Random::Flat() * row_pmax) {
-            if (row_pmax < hold) { pmax_per_row[idx] = hold * 2.0; row_pmax = hold * 2.0; }
-            break;
-        }
-        if (++attempts > 1000000) break;
-    }
+	    // Step 2: sample (x, pT) from the precomputed exact table.
+	    const SamplingTable& table = energy_tables[table_index_per_row[idx]];
+	    const std::vector<double>& cell_cdf = table.cell_cdf;
+	    const double cell_total = cell_cdf.empty() ? 0.0 : cell_cdf.back();
+	    if (cell_total <= 0.0) return;
+	    double u2 = Random::Flat(0.0, cell_total);
+	    int cell_idx = static_cast<int>(
+	        std::lower_bound(cell_cdf.begin(), cell_cdf.end(), u2) - cell_cdf.begin());
+	    if (cell_idx >= static_cast<int>(cell_cdf.size())) cell_idx = cell_cdf.size() - 1;
+
+	    const int ix = cell_idx / table_pt_bins;
+	    const int ip = cell_idx % table_pt_bins;
+	    const double dx = (ZMAX - ZMIN) / table_x_bins;
+	    const double pt_lo = pt_grid_value(ip);
+	    const double pt_hi = pt_grid_value(ip + 1);
+	    const std::vector<double>& grid_values = table.grid_values;
+	    const int row_stride = table_pt_bins + 1;
+	    const double f00 = grid_values[ix * row_stride + ip];
+	    const double f10 = grid_values[(ix + 1) * row_stride + ip];
+	    const double f01 = grid_values[ix * row_stride + ip + 1];
+	    const double f11 = grid_values[(ix + 1) * row_stride + ip + 1];
+	    const double fmax = std::max(std::max(f00, f10), std::max(f01, f11));
+
+	    double x = ZMIN + (ix + 0.5) * dx;
+	    double pT = 0.5 * (pt_lo + pt_hi);
+	    if (fmax > 0.0) {
+	        for (int attempt = 0; attempt < 1000; ++attempt) {
+	            const double tx = Random::Flat();
+	            const double tp = Random::Flat();
+	            const double interp =
+	                (1.0 - tx) * (1.0 - tp) * f00 +
+	                tx * (1.0 - tp) * f10 +
+	                (1.0 - tx) * tp * f01 +
+	                tx * tp * f11;
+	            if (Random::Flat(0.0, fmax) <= interp) {
+	                x = ZMIN + (ix + tx) * dx;
+	                pT = pt_lo + tp * (pt_hi - pt_lo);
+	                break;
+	            }
+	        }
+	    }
 
     // Step 3: set 4-momentum
     double EA  = x * E_parent;

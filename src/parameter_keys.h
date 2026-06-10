@@ -72,8 +72,13 @@ const string kinetic_energy_cut_key = "kinetic_energy_cut";
 const string secondary_spectrum_key   = "secondary_spectrum_file";
 const string z_production_start_key   = "z_production_start";
 const string z_production_end_key     = "z_production_end";
+const string spectrum_prune_fraction_key = "spectrum_prune_fraction";
+const string brem_table_x_bins_key    = "brem_table_x_bins";
+const string brem_table_pt_bins_key   = "brem_table_pt_bins";
+const string brem_table_pt_power_key  = "brem_table_pt_power";
 const string target_Z_key             = "target_Z";
 const string target_A_key             = "target_A";
+const string target_n_density_key     = "target_n_density";
 
 
 vector<string> spherearr = {"radius","x-position","y-position","z-position"};

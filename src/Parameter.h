@@ -29,11 +29,16 @@ class production_channel{
 		std::string secondary_spectrum_file;
 		//This map holds sanfordwang parameters.
 		std::map<std::string, std::string> dist_param_map;
-		double energy_bins, meson_per_pi0, PTMAX, PTMIN, QMIN, tolerance, ZMIN, ZMAX, num_per_pot,max_meson_mom;
-		double z_production_start = 0.0;
-		double z_production_end   = 0.0;
-		double target_Z = 26.0;
-		double target_A = 56.0;
+	        double energy_bins, meson_per_pi0, PTMAX, PTMIN, QMIN, tolerance, ZMIN, ZMAX, num_per_pot,max_meson_mom;
+	        double z_production_start = 0.0;
+	        double z_production_end   = 0.0;
+	        double spectrum_prune_fraction = 1.0e-8;
+	        double brem_table_pt_power = 3.0;
+	        int brem_table_x_bins = 72;
+	        int brem_table_pt_bins = 72;
+	        double target_Z = 26.0;
+	        double target_A = 56.0;
+	        double target_n_density = 0.0;
 		bool particle_list_position;
 		production_channel();
 		bool query_dist_param(){return (dist_param_map.size()!=0);}
@@ -56,11 +61,16 @@ class production_channel{
         std::string Proton_PDF_File(){return proton_pdf_file;}
         std::string Neutron_PDF_File(){return neutron_pdf_file;}
         std::string Production_Channel(){return prod_chan;}
-        std::string Secondary_Spectrum_File(){return secondary_spectrum_file;}
-        double Z_Production_Start(){return z_production_start;}
-        double Z_Production_End(){return z_production_end;}
-        double Target_Z(){return target_Z;}
+	        std::string Secondary_Spectrum_File(){return secondary_spectrum_file;}
+	        double Z_Production_Start(){return z_production_start;}
+	        double Z_Production_End(){return z_production_end;}
+	        double Spectrum_Prune_Fraction(){return spectrum_prune_fraction;}
+	        double Brem_Table_Pt_Power(){return brem_table_pt_power;}
+	        int Brem_Table_X_Bins(){return brem_table_x_bins;}
+	        int Brem_Table_Pt_Bins(){return brem_table_pt_bins;}
+	        double Target_Z(){return target_Z;}
         double Target_A(){return target_A;}
+        double Target_N_Dens(){return target_n_density;}
 		std::shared_ptr<std::list<production_distribution> > Get_Dist_Mods_List(){return dist_mods;}
 		std::shared_ptr<std::list<production_distribution> > dist_mods;//Should probably be private
 };
