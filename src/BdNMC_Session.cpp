@@ -1,4 +1,5 @@
 #include "BdNMC_Session.h"
+#include "BdNMC_capi.h"
 #include "record.h"
 #include "constants.h"
 #include "Random.h"
@@ -43,6 +44,27 @@ void BdNMCSession::set_write_files(bool events, bool summary){
 	write_summary_ = summary;
 }
 
+void BdNMCSession::reset_state(){
+	// art/ROOT may leave a non-default MXCSR / rounding mode after Geometry
+	// load. BdNMC rejection sampling is sensitive to tiny FP differences
+	// (loop counts change → RNG stream diverges → different pMax).
+	std::fesetenv(FE_DFL_ENV);
+	std::fesetround(FE_TONEAREST);
+
+	delete par_;
+	par_ = 0;
+	model_.reset();
+	SigGen_.reset();
+	DMGen_list_.clear();
+	PartDist_list_.clear();
+	Vnum_list_.clear();
+	sig_part_vec_.clear();
+	events_.clear();
+	summary_ = BdNMCRunSummary();
+	configured_ = false;
+	ran_ = false;
+}
+
 BdNMCParticle BdNMCSession::particle_from(const Particle& p) const {
 	BdNMCParticle out;
 	out.name = p.name;
@@ -69,26 +91,7 @@ void BdNMCSession::record_event(int event_index, double weight, const list<Parti
 }
 
 int BdNMCSession::configure_from_card(const std::string& parameter_file){
-	using namespace std::placeholders;
-
-	// art/ROOT may leave a non-default MXCSR / rounding mode after Geometry
-	// load. BdNMC rejection sampling is sensitive to tiny FP differences
-	// (loop counts change → RNG stream diverges → different pMax).
-	std::fesetenv(FE_DFL_ENV);
-	std::fesetround(FE_TONEAREST);
-
-	delete par_;
-	par_ = 0;
-	model_.reset();
-	SigGen_.reset();
-	DMGen_list_.clear();
-	PartDist_list_.clear();
-	Vnum_list_.clear();
-	sig_part_vec_.clear();
-	events_.clear();
-	summary_ = BdNMCRunSummary();
-	configured_ = false;
-	ran_ = false;
+	reset_state();
 
 	std::ifstream parstream(parameter_file);
 	try{
@@ -121,6 +124,24 @@ int BdNMCSession::configure_from_card(const std::string& parameter_file){
 		return -1;
 	}
 	cout << "Parameter read successfully\n";
+	parstream.close();
+	return finish_configure();
+}
+
+int BdNMCSession::configure_meson(const BdNMCMesonConfig& cfg,
+	const BdNMCMesonRow* rows, int nrows){
+	reset_state();
+	par_ = new Parameter(cfg, rows, nrows);
+	if(par_->Integrity()!=0){
+		cerr << "BdNMCMesonConfig integrity check failed.\n";
+		return -1;
+	}
+	cout << "Parameter built from BdNMCMesonConfig (" << nrows << " meson rows)\n";
+	return finish_configure();
+}
+
+int BdNMCSession::finish_configure(){
+	using namespace std::placeholders;
 
 	if(par_->Seed()>=0)
 		Random(par_->Seed());
@@ -142,7 +163,6 @@ int BdNMCSession::configure_from_card(const std::string& parameter_file){
 	string sig_part_name = "DM";
 
 	outmode_ = par_->Output_Mode();
-	parstream.close();
 
 	samplesize_ = par_->Sample_Size();
 	repeat_ = 1;
@@ -231,10 +251,6 @@ int BdNMCSession::configure_from_card(const std::string& parameter_file){
 	cout << "Minimum Scattering Energy = " << min_scatter_energy << " GeV" <<  endl;
 	cout << "Timing Cut = " << timing_cut_ << " s\n";
 
-	////////////////////
-	//START OF BURN-IN//
-	////////////////////
-
 	double BURN_MAX = par_->Burn_In();
 	if(BURN_MAX<0){
 		cout << "burn_max < 0 specified. Assuming default value burn_max=1000\n";
@@ -297,7 +313,7 @@ int BdNMCSession::configure_from_card(const std::string& parameter_file){
 
 int BdNMCSession::run(){
 	if(!configured_){
-		cerr << "BdNMCSession::run called before successful configure_from_card.\n";
+		cerr << "BdNMCSession::run called before successful configure.\n";
 		return -1;
 	}
 	if(par_->Output_Mode()=="particle_list"){

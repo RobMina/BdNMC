@@ -2,6 +2,7 @@
 #define Parameter_h
 
 #include "detector.h"
+#include "BdNMC_capi.h"
 
 #include <memory>
 #include <ios>
@@ -10,6 +11,7 @@
 #include <string>
 #include <map>
 #include <list>
+#include <vector>
 
 class production_distribution{
 	public:
@@ -24,6 +26,9 @@ class production_distribution{
 class production_channel{
 	public:
 		std::string prod_chan, prod_dist, particle_list_file;
+		/* Optional in-memory particle list (px py pz E x y z t). If non-empty,
+		   Model builds Particle_List from this instead of particle_list_file. */
+		std::vector<BdNMCMesonRow> particle_list_rows;
 		std::string sanfordwang_file;
 		std::string parton_V_n_file, parton_V_p_file,proton_pdf_file,neutron_pdf_file;
 		std::string secondary_spectrum_file;
@@ -78,6 +83,8 @@ class production_channel{
 class Parameter{
     public:
         Parameter(std::ifstream&);
+        /* Build Parameter from structured meson config + in-memory rows (no card). */
+        Parameter(const BdNMCMesonConfig& cfg, const BdNMCMesonRow* rows, int nrows);
         ~Parameter(){}
        
         //Allows the user to query the map directly.

@@ -422,7 +422,7 @@ Parameter::Parameter(std::ifstream &instream){
 		for(list<production_channel>::iterator iter = prodlist->begin(); iter!=prodlist->end(); iter++)
 		{
 			if(iter->prod_dist=="particle_list"||output_mode=="particle_list"){
-				if(iter->particle_list_file==""){
+				if(iter->particle_list_file=="" && iter->particle_list_rows.empty()){
 					integrity=-1;
 					cerr << "particle_list_file undefined for production_distribution particle_list.\n"; 
 				}
@@ -483,6 +483,90 @@ Parameter::Parameter(std::ifstream &instream){
 }//end of Parameter::Parameter
 //This parses a distribution parameter file
 
+Parameter::Parameter(const BdNMCMesonConfig& cfg, const BdNMCMesonRow* rows, int nrows){
+	prodlist = std::shared_ptr<list<production_channel> >(new list<production_channel>);
+	integrity = 0;
+
+	if(!cfg.production_channel || !cfg.signal_channel){
+		cerr << "BdNMCMesonConfig missing production_channel or signal_channel\n";
+		integrity = -1;
+		return;
+	}
+	if(!rows || nrows <= 0){
+		cerr << "BdNMCMesonConfig requires a non-empty meson row buffer\n";
+		integrity = -1;
+		return;
+	}
+
+	model_name = "Dark_Photon";
+	mass_dm = cfg.mass_dm;
+	mass_V = cfg.mass_dp;
+	epsilon = cfg.epsilon;
+	alpha_D = cfg.alpha_D;
+	samplesize = cfg.samplesize;
+	burn_in = cfg.burn_max;
+	burn_timeout = cfg.burn_timeout;
+	seed = cfg.seed;
+	POT = cfg.POT;
+	pi0ratio = cfg.pi0_per_POT;
+	beam_energy = cfg.beam_energy;
+	sig_channel = cfg.signal_channel;
+	min_scatter_energy = cfg.min_scatter_energy;
+	max_scatter_energy = cfg.max_scatter_energy;
+	angle_lower_limit = cfg.min_scatter_angle;
+	angle_upper_limit = cfg.max_scatter_angle;
+	efficiency = cfg.efficiency;
+	output_mode = "comprehensive";
+	output_file = "";
+	summary_file = "";
+	run_name = "meson_memory";
+	timing_cut = 0;
+	max_dm_energy = beam_energy;
+	edmres = 0.1;
+	min_event = -1;
+	repeat = 1;
+	max_trials = -1;
+	coherent = false;
+	kinetic_energy_cut = false;
+	weighted = false;
+	scatter_dist_filename = "";
+	p_cross = 0;
+	target_length = 0;
+	target_n_density = 0;
+	target_mass = 0;
+	target_e_num = 0;
+	target_n_num = 0;
+	target_p_num = 0;
+
+	production_channel ch;
+	ch.prod_chan = cfg.production_channel;
+	ch.prod_dist = "particle_list";
+	ch.particle_list_position = (cfg.particle_list_position != 0);
+	ch.meson_per_pi0 = cfg.meson_per_pi0;
+	ch.particle_list_file = "";
+	ch.particle_list_rows.assign(rows, rows + nrows);
+	prodlist->push_back(ch);
+
+	try{
+		// Match Parameter::Build_Detector cuboid argument order (width,height,length).
+		det = std::make_shared<detector_cuboid>(
+			cfg.det_x, cfg.det_y, cfg.det_z,
+			cfg.width, cfg.height, cfg.length,
+			cfg.det_phi, cfg.det_theta, cfg.det_psi);
+		det->add_material(cfg.number_density, cfg.proton_number, cfg.neutron_number,
+			cfg.electron_number, cfg.mass, "Liquid_Scintillator");
+	}
+	catch(exception& e){
+		cerr << "Exception constructing detector from BdNMCMesonConfig: " << e.what() << "\n";
+		integrity = -1;
+	}
+
+	/* Kinetic_Mixing / models read masses & couplings via Query_Map. */
+	keymap["dark_matter_mass"] = std::to_string(cfg.mass_dm);
+	keymap["dark_photon_mass"] = std::to_string(cfg.mass_dp);
+	keymap["epsilon"] = std::to_string(cfg.epsilon);
+	keymap["alpha_D"] = std::to_string(cfg.alpha_D);
+}
 
 void Parameter::Build_Detector(map<string, string> &keymap){
     if(keymap.count(detkey)==1){

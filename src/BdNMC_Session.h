@@ -23,6 +23,9 @@ class BdNMCSession {
 
 		//Returns 0 on success, negative on failure.
 		int configure_from_card(const std::string& path);
+		/* Structured meson particle_list configure (no card I/O). */
+		int configure_meson(const BdNMCMesonConfig& cfg,
+			const BdNMCMesonRow* rows, int nrows);
 		void set_write_files(bool events, bool summary);
 		//Returns 0 on success, negative on failure.
 		int run();
@@ -31,6 +34,8 @@ class BdNMCSession {
 		const BdNMCRunSummary& summary() const {return summary_;}
 
 	private:
+		void reset_state();
+		int finish_configure();
 		void record_event(int event_index, double weight, const std::list<Particle>& partlist);
 		BdNMCParticle particle_from(const Particle& p) const;
 

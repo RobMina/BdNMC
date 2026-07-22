@@ -2,12 +2,14 @@
 #define PARTICLE_LIST_H
 
 #include "Distribution.h"
+#include "BdNMC_capi.h"
 
 #include <string>
 #include <iostream>
 #include <fstream>
 #include <list>
 #include <memory>
+#include <vector>
 
 struct _part{
 	double px,py,pz,E,x,y,z,t;
@@ -18,11 +20,14 @@ class Particle_List: public Distribution{
 
 public:
 	Particle_List(const std::string&, bool set_pos = false);
-	~Particle_List(){instream.close();}
+	Particle_List(const BdNMCMesonRow* rows, int nrows, bool set_pos = false);
+	Particle_List(const std::vector<BdNMCMesonRow>& rows, bool set_pos = false);
+	~Particle_List(){ if(instream.is_open()) instream.close(); }
 	//Get_Particle returns the momentum and direction of a particle from a list.
 	void sample_particle(Particle &part);
 	void Get_Particle(double& pmom, double& theta, double& phi);
 private:
+	void load_from_rows(const BdNMCMesonRow* rows, int nrows);
 	//determines how many particles should be read in from file at once.
 	std::ifstream instream;
 	//int batch_size;

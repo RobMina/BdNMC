@@ -7,14 +7,43 @@ extern "C" {
 
 typedef struct BdNMChandle BdNMChandle;
 
+/* One meson (or other parent) row in BdNMC beam-frame units:
+   momentum GeV, position meters, time seconds. */
+typedef struct {
+	double px, py, pz, E;
+	double x, y, z, t;
+} BdNMCMesonRow;
+
+/* Structured meson NCE configure (no card file / no card string). */
+typedef struct {
+	double mass_dm, mass_dp, epsilon, alpha_D;
+	int samplesize, burn_max, burn_timeout, seed; /* seed < 0 → default RNG */
+	double POT, pi0_per_POT, meson_per_pi0, beam_energy;
+	const char* production_channel; /* "pi0_decay" | "eta_decay" */
+	const char* signal_channel;     /* typically "NCE_electron" */
+	int particle_list_position;     /* nonzero → use x,y,z,t from rows */
+	double min_scatter_energy, max_scatter_energy;
+	double min_scatter_angle, max_scatter_angle;
+	double efficiency;
+	double det_x, det_y, det_z, width, height, length;
+	double det_phi, det_theta, det_psi;
+	double number_density, proton_number, neutron_number, electron_number, mass;
+} BdNMCMesonConfig;
+
 BdNMChandle* bdnmc_create(void);
 void bdnmc_destroy(BdNMChandle* h);
 
 /* write_events/write_summary: 0=off, nonzero=on. Default after create is off/off. */
 void bdnmc_set_write_files(BdNMChandle* h, int write_events, int write_summary);
 
-/* Returns 0 on success. */
+/* Returns 0 on success. Path-based configure (CLI / regression). */
 int bdnmc_configure(BdNMChandle* h, const char* card_path);
+
+/* Structured in-memory configure for meson particle_list production. */
+int bdnmc_configure_meson(BdNMChandle* h,
+	const BdNMCMesonConfig* cfg,
+	const BdNMCMesonRow* rows, int nrows);
+
 int bdnmc_run(BdNMChandle* h);
 
 int bdnmc_nevents(const BdNMChandle* h);

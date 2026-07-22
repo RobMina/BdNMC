@@ -31,6 +31,32 @@ Particle_List::Particle_List(const string& infile, bool set_pos){
 	iter=partlist.begin();
 
 }
+
+void Particle_List::load_from_rows(const BdNMCMesonRow* rows, int nrows){
+	part_count = 0;
+	partlist.clear();
+	if(!rows || nrows <= 0){
+		std::cerr << "Particle_List: empty in-memory row buffer\n";
+		throw -1;
+	}
+	for(int i = 0; i < nrows; ++i){
+		const BdNMCMesonRow& r = rows[i];
+		partlist.push_back(_part(r.px, r.py, r.pz, r.E, r.x, r.y, r.z, r.t));
+		part_count++;
+	}
+	iter = partlist.begin();
+	cout << "Particle_List loaded " << part_count << " particles from memory\n";
+}
+
+Particle_List::Particle_List(const BdNMCMesonRow* rows, int nrows, bool set_pos){
+	POS = set_pos;
+	load_from_rows(rows, nrows);
+}
+
+Particle_List::Particle_List(const std::vector<BdNMCMesonRow>& rows, bool set_pos){
+	POS = set_pos;
+	load_from_rows(rows.data(), (int)rows.size());
+}
 //Loads particles into the list until the entire file is read, or the list is of length batch_size.
 //If batch_size is negative, the entire file is read.
 //Note that batch_size is not yet implemented for some reason.

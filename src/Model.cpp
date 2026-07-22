@@ -130,10 +130,19 @@ bool Model::Prepare_Production_Distribution(std::string prodchoice, std::string 
     }
     else if(proddist=="particle_list"){
         bool set_pos = prodchan.par_list_pos();
-        if(set_pos){
-            cout << "position off-sets were read from particle_list file\n";
+        std::shared_ptr<Particle_List> pl;
+        if(!prodchan.particle_list_rows.empty()){
+            if(set_pos){
+                cout << "position off-sets taken from in-memory particle_list rows\n";
+            }
+            pl = std::shared_ptr<Particle_List>(new Particle_List(prodchan.particle_list_rows, set_pos));
         }
-        std::shared_ptr<Particle_List> pl(new Particle_List(prodchan.particle_list_file,set_pos));
+        else{
+            if(set_pos){
+                cout << "position off-sets were read from particle_list file\n";
+            }
+            pl = std::shared_ptr<Particle_List>(new Particle_List(prodchan.particle_list_file, set_pos));
+        }
         Dist = pl;
     }
     else{

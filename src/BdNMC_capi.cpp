@@ -38,6 +38,13 @@ int bdnmc_configure(BdNMChandle* h, const char* card_path){
 	return h->session.configure_from_card(card_path);
 }
 
+int bdnmc_configure_meson(BdNMChandle* h,
+	const BdNMCMesonConfig* cfg,
+	const BdNMCMesonRow* rows, int nrows){
+	if(!h || !cfg || !rows || nrows <= 0) return -1;
+	return h->session.configure_meson(*cfg, rows, nrows);
+}
+
 int bdnmc_run(BdNMChandle* h){
 	if(!h) return -1;
 	return h->session.run();
