@@ -262,7 +262,13 @@ void XYX_rotate(const double t1, const double t2, const double t3, double *arr){
 
 detector_cuboid::detector_cuboid(double x, double y, double z, double detwidth, double detheight, double detlength, double detPhi, double detTheta, double detPsi){
     r[0]=x; r[1]=y; r[2]=z;
-    //Length oriented along z-axis
+    // Length oriented along z-axis. Must zero the whole face array first:
+    // only the "axis" components are set below; XYX_rotate uses all three
+    // and uninitialized off-axis entries make Ldet ASLR-dependent (wrong
+    // pMax / hangs when BdNMC is loaded into art).
+    for(int i=0; i<6; i++)
+        for(int j=0; j<3; j++)
+            face[i][j]=0.0;
     face[0][0]=detwidth/2.0;
     face[1][1]=detheight/2.0;
     face[2][2]=detlength/2.0;

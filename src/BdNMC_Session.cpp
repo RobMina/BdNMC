@@ -7,6 +7,7 @@
 #include <fstream>
 #include <algorithm>
 #include <cmath>
+#include <cfenv>
 #include <exception>
 #include <functional>
 
@@ -69,6 +70,12 @@ void BdNMCSession::record_event(int event_index, double weight, const list<Parti
 
 int BdNMCSession::configure_from_card(const std::string& parameter_file){
 	using namespace std::placeholders;
+
+	// art/ROOT may leave a non-default MXCSR / rounding mode after Geometry
+	// load. BdNMC rejection sampling is sensitive to tiny FP differences
+	// (loop counts change → RNG stream diverges → different pMax).
+	std::fesetenv(FE_DFL_ENV);
+	std::fesetround(FE_TONEAREST);
 
 	delete par_;
 	par_ = 0;

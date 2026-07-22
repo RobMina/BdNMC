@@ -38,6 +38,9 @@ bool Electron_Scatter::probscatter (std::shared_ptr<detector>& det, Particle &DM
 	
     double LXdet = det->Ldet(DM)*convmcm;
 	double prob=sigma2(DM.E,DM.m,MDP,kap,alD,scatmax(DM.E, DM.m),scatmin(DM.E,DM.m))*(det->ENtot())*LXdet*convGeV2cm2;
+	if(!std::isfinite(prob) || prob < 0){
+		return false;
+	}
 	if(prob > Random::Flat(0,1)*pMax){
 		if (prob > pMax)
 			pMax = prob;
@@ -50,7 +53,11 @@ bool Electron_Scatter::probscatter (std::shared_ptr<detector>& det, Particle &DM
 	double prob;
 	
     double LXdet = det->Ldet(DM)*convmcm;
-	if((prob = sigma2(DM.E,DM.m,MDP,kap,alD,scatmax(DM.E,DM.m),scatmin(DM.E,DM.m))*(det->ENtot())*LXdet*convGeV2cm2) > Random::Flat(0,1)*pMax){
+	prob = sigma2(DM.E,DM.m,MDP,kap,alD,scatmax(DM.E,DM.m),scatmin(DM.E,DM.m))*(det->ENtot())*LXdet*convGeV2cm2;
+	if(!std::isfinite(prob) || prob < 0){
+		return false;
+	}
+	if(prob > Random::Flat(0,1)*pMax){
 		if (prob > pMax)
 			pMax = prob;
         scatterevent(DM, electron);

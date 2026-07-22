@@ -1,31 +1,40 @@
 #include "Random.h"
 #include <iostream>
+#include <mutex>
 
+// Internal linkage: these must NOT be exported from libBdNMC.so. When BdNMC is
+// loaded into art/ROOT, a global `generator` / `distribution` symbol can be
+// interposed by another DSO, corrupting the RNG (wrong pMax, even pMax=inf).
+namespace {
 std::mt19937 generator;
 std::uniform_real_distribution<double> distribution;
+std::mutex rng_mutex;
+}
+
 //------------------------------------------------------------------------------
 // The constructors
 // Set seed from the system timer or initiate seed yourself
 //
 Random::Random(){
 	unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-    //generator = std::default_random_engine(seed);
-    generator = std::mt19937(seed);
-    distribution = std::uniform_real_distribution<double>(0.0,1.0);
-    std::cout << "Seed=" << seed << std::endl;
+	std::lock_guard<std::mutex> lock(rng_mutex);
+	generator = std::mt19937(seed);
+	distribution = std::uniform_real_distribution<double>(0.0,1.0);
+	std::cout << "Seed=" << seed << std::endl;
 }
-Random::Random(unsigned seed){ 
-    //generator = std::default_random_engine(seed);
-    generator = std::mt19937(seed);
-    distribution = std::uniform_real_distribution<double>(0.0,1.0);
-    std::cout << "Seed=" << seed << std::endl;
+Random::Random(unsigned seed){
+	std::lock_guard<std::mutex> lock(rng_mutex);
+	generator = std::mt19937(seed);
+	distribution = std::uniform_real_distribution<double>(0.0,1.0);
+	std::cout << "Seed=" << seed << std::endl;
 }
 
 //------------------------------------------------------------------------------
-// Flat (uniformistribution
+// Flat (uniform) distribution
 // Returns a uniformly distributed random real number between [min,max]
 //
 double Random::Flat(double min, double max){
+	std::lock_guard<std::mutex> lock(rng_mutex);
 	return (min+(max-min)*distribution(generator));
 }
 //------------------------------------------------------------------------------
@@ -44,10 +53,10 @@ double Random::Gauss(double mean, double sigma){
 	double x, y, z;
 	
 	while(1){
-        x = 2.0 * Flat() - 1.0;
-        y = 2.0 * Flat() - 1.0;
-        z = x*x + y*y;
-        if( z <= 1.0 ) break;
+		x = 2.0 * Flat() - 1.0;
+		y = 2.0 * Flat() - 1.0;
+		z = x*x + y*y;
+		if( z <= 1.0 ) break;
 	}
 	return ( mean + sigma*x*sqrt(-2.0*log(z)/z) );
 }
@@ -72,10 +81,10 @@ double Random::BreitWigner(double mean, double fwhm){
 	double x, y, z;
 	
 	while(1){
-        x = 2.0 * Flat() - 1.0;
-        y = 2.0 * Flat() - 1.0;
-        z = x*x + y*y;
-        if( z <= 1.0 ) break;
+		x = 2.0 * Flat() - 1.0;
+		y = 2.0 * Flat() - 1.0;
+		z = x*x + y*y;
+		if( z <= 1.0 ) break;
 	}
 	return ( mean + 0.5*fwhm*x/y );
 }
