@@ -1,0 +1,124 @@
+[
+ {
+  "stem": "ref/mb_pi0_m001",
+  "base": "mb_pi0_m005",
+  "m_chi_MeV": 1,
+  "seed": 2026102801,
+  "samplesize": 1000000,
+  "max_trials": 2000000000
+ },
+ {
+  "stem": "ref/mb_pi0_m005",
+  "base": "mb_pi0_m005",
+  "m_chi_MeV": 5,
+  "seed": 2026102802,
+  "samplesize": 1000000,
+  "max_trials": 2000000000
+ },
+ {
+  "stem": "ref/mb_pi0_m020",
+  "base": "mb_pi0_m005",
+  "m_chi_MeV": 20,
+  "seed": 2026102803,
+  "samplesize": 1000000,
+  "max_trials": 2000000000
+ },
+ {
+  "stem": "ref/mb_pi0_m045",
+  "base": "mb_pi0_m005",
+  "m_chi_MeV": 45,
+  "seed": 2026102804,
+  "samplesize": 1000000,
+  "max_trials": 2000000000
+ },
+ {
+  "stem": "ref/he_pi0_cuboid_m001",
+  "base": "he_pi0_cuboid_m005",
+  "m_chi_MeV": 1,
+  "seed": 2026102805,
+  "samplesize": 1000000,
+  "max_trials": 1000000000
+ },
+ {
+  "stem": "ref/he_pi0_cuboid_m005",
+  "base": "he_pi0_cuboid_m005",
+  "m_chi_MeV": 5,
+  "seed": 2026102806,
+  "samplesize": 1000000,
+  "max_trials": 1000000000
+ },
+ {
+  "stem": "ref/he_pi0_cuboid_m020",
+  "base": "he_pi0_cuboid_m005",
+  "m_chi_MeV": 20,
+  "seed": 2026102807,
+  "samplesize": 1000000,
+  "max_trials": 1000000000
+ },
+ {
+  "stem": "ref/he_pi0_cuboid_m045",
+  "base": "he_pi0_cuboid_m005",
+  "m_chi_MeV": 45,
+  "seed": 2026102808,
+  "samplesize": 1000000,
+  "max_trials": 1000000000
+ },
+ {
+  "stem": "ref/mb_brem_m001",
+  "base": "mb_brem_m005",
+  "m_chi_MeV": 1,
+  "seed": 2026102809,
+  "samplesize": 1000000000,
+  "max_trials": 20000000
+ },
+ {
+  "stem": "mb_brem_m005",
+  "reused": "out/mb_brem_m005/O2",
+  "m_chi_MeV": 5
+ },
+ {
+  "stem": "ref/mb_brem_m020",
+  "base": "mb_brem_m005",
+  "m_chi_MeV": 20,
+  "seed": 2026102811,
+  "samplesize": 1000000000,
+  "max_trials": 20000000
+ },
+ {
+  "stem": "ref/mb_brem_m045",
+  "base": "mb_brem_m005",
+  "m_chi_MeV": 45,
+  "seed": 2026102812,
+  "samplesize": 1000000000,
+  "max_trials": 20000000
+ },
+ {
+  "stem": "ref/he_brem_cuboid_m001",
+  "base": "he_brem_cuboid_m005",
+  "m_chi_MeV": 1,
+  "seed": 2026102813,
+  "samplesize": 1000000000,
+  "max_trials": 20000000
+ },
+ {
+  "stem": "he_brem_cuboid_m005",
+  "reused": "out/he_brem_cuboid_m005/O2",
+  "m_chi_MeV": 5
+ },
+ {
+  "stem": "ref/he_brem_cuboid_m020",
+  "base": "he_brem_cuboid_m005",
+  "m_chi_MeV": 20,
+  "seed": 2026102815,
+  "samplesize": 1000000000,
+  "max_trials": 20000000
+ },
+ {
+  "stem": "ref/he_brem_cuboid_m045",
+  "base": "he_brem_cuboid_m005",
+  "m_chi_MeV": 45,
+  "seed": 2026102816,
+  "samplesize": 1000000000,
+  "max_trials": 20000000
+ }
+]

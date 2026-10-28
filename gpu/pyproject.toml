@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bdnmc-jax"
+version = "0.0.1"
+description = "Batched (JAX) port of BdNMC: light dark matter production, propagation and scattering at fixed-target experiments"
+requires-python = ">=3.11"
+dependencies = ["jax", "numpy"]
+
+[project.optional-dependencies]
+test = ["pytest", "scipy"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

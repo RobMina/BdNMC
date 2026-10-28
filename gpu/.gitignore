@@ -1,0 +1,9 @@
+# Outputs, stock builds and the local Python environment are not tracked.
+phase0/out/
+validation/out/
+stock
+.venv
+v0/v0_dump
+__pycache__/
+.pytest_cache/
+*.npz

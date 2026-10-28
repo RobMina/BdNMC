@@ -1,0 +1,30 @@
+[
+ {
+  "stem": "ref_wl/he_pi0_cuboid_m001",
+  "base": "he_pi0_cuboid_m005",
+  "m_chi_MeV": 1,
+  "seed": 2026103100,
+  "max_trials": 86000000
+ },
+ {
+  "stem": "ref_wl/he_pi0_cuboid_m005",
+  "base": "he_pi0_cuboid_m005",
+  "m_chi_MeV": 5,
+  "seed": 2026103101,
+  "max_trials": 86000000
+ },
+ {
+  "stem": "ref_wl/he_pi0_cuboid_m020",
+  "base": "he_pi0_cuboid_m005",
+  "m_chi_MeV": 20,
+  "seed": 2026103102,
+  "max_trials": 86000000
+ },
+ {
+  "stem": "ref_wl/he_pi0_cuboid_m045",
+  "base": "he_pi0_cuboid_m005",
+  "m_chi_MeV": 45,
+  "seed": 2026103103,
+  "max_trials": 86000000
+ }
+]
