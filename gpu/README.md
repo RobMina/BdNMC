@@ -7,8 +7,8 @@ generic, experiment-independent parameter cards.
 - **Validated:** pi0-decay dark-photon production with Sanford-Wang or BMPT parents, on-shell decays, sphere and
   cuboid detectors and `NCE_electron` scattering pass the V0, V1 and V2 tests on CPU and on an NVIDIA A100, with
   either parent sampler. The A100 gives the same counts as the CPU.
-- **Proton bremsstrahlung** (`V_decay` with `proton_brem`, stock parent sampler) passes V1 and V2 on an A100; its
-  V0 entries wait for a rebuild of the harness.
+- **Proton bremsstrahlung** (`V_decay` with `proton_brem`, stock parent sampler) passes V0 on CPU, and V1 and V2
+  on an A100.
 - **Output:** stock's text event format or HDF5.
 - **Throughput** with HDF5 output, in accepted events per second against one core of stock `-O2`:
   - stock parent sampler: 126x (Sanford-Wang card), 109x (BMPT card);

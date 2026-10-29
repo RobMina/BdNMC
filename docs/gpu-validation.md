@@ -9,8 +9,8 @@ bremsstrahlung (`V_decay` with `proton_brem`); sphere and cuboid detectors; `NCE
 - **pi0, `parent_sampler="stock"`** (the default) passes V0, V1 and V2 on CPU (L1) and on an A100 (G1).
 - **pi0, `parent_sampler="envelope"`** is validated on G1 under a pre-declared repeat rule, after failing V2 once
   (see [below](#the-envelope-sampler)).
-- **Proton brem** (stock sampler only) passes V1 and V2 on G1 at the first attempt ([below](#proton-bremsstrahlung)).
-  Its V0 entries are in the harness but wait for a rebuild of it.
+- **Proton brem** (stock sampler only) passes V0 on L1, and V1 and V2 on G1 at the first attempt
+  ([below](#proton-bremsstrahlung)).
 - **Not validated yet:** eta, off-shell decays, other detectors or signals.
 - **Event output** (text and HDF5) is tested for format and content ([Unit tests](#unit-tests)); it does not change
   the physics.
@@ -105,21 +105,23 @@ The port differs from stock where batching needs it:
 
 ## V0: function values against the stock C++
 
-`gpu/v0/v0_dump.cpp` links the stock `-O2` library and prints 10,172 values at `%.17g`:
+`gpu/v0/v0_dump.cpp` links the stock `-O2` library and prints 12,227 values at `%.17g`:
 - `EeTMax`, `EeTMin`, `sigma2`, `dsigmadEe`, `ThetaEe`;
 - `Ldet` for a sphere, a cuboid and a rotated cuboid (6,000 rays);
 - the pi0 branching ratios;
-- the Sanford-Wang density and the BMPT invariant cross section.
+- the Sanford-Wang density and the BMPT invariant cross section;
+- proton brem: `wpp` on a (z, pT^2, m_A) grid (1,323 points), `d2N` (726 points) and `V_prod_rate` for the two
+  generic brem windows at m_A = 0.02, 0.1 and 0.3 GeV.
 
 `tests/test_v0.py` compares the port with them.
 - **Tolerance:** (1e-12 + 64 eps x condition number) relative. The condition number covers cancellation (EeTMax at
   high energy, `F2(Emax) - F2(Emin)`, BMPT near xR = 1, Sanford-Wang at p = p_max), where clang's FMA contraction
   and XLA round differently by about eps x condition.
 - **`ThetaEe` endpoint:** rows at the recoil endpoint may be NaN or <= 3e-8 in either code.
-- **Result:** passes on L1 and on G1.
-- **Proton brem (pending a harness rebuild):** `v0_dump.cpp` now also prints `wpp` on a (z, pT^2, m_A) grid, and
-  `d2N` and `V_prod_rate` for the two generic brem windows at m_A = 0.02, 0.1 and 0.3 GeV. `test_proton_brem` skips
-  until `v0_dump.txt` has them. Meanwhile the unit tests match `Vnum` to the eight stock brem logs within 5e-6.
+- **Brem tolerances:** `wpp` and `d2N` use the same rule, with a condition number that also covers sigma_pp(s')
+  as s' cancels near z = 1. `V_prod_rate` (40,401 positive terms summed in a different order) is within 1e-10.
+- **Result:** passes on L1 and on G1. The brem entries were added later (harness rebuilt 2026-10-29) and have been
+  checked on L1 only; the pi0-era entries are unchanged.
 
 ## V1 and V2
 
@@ -290,7 +292,8 @@ Per point, V1:
   - one compile across masses;
   - text events start with the V line (no meson).
 
-64 tests in all: 63 pass and `test_proton_brem` (V0) skips until the harness is rebuilt (90 s on L1, 3 min on G1).
+64 tests in all, all passing on L1 (86 s). On G1 (3 min) they last ran before the harness rebuild, with
+`test_proton_brem` skipped.
 
 ## Not validated yet
 

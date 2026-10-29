@@ -2,7 +2,9 @@
 
 `v0_dump.cpp` links the stock `-O2` library and prints stock function values, with their inputs, at `%.17g`:
 `EeTMax`, `EeTMin`, `sigma2`, `dsigmadEe`, `ThetaEe`, `Ldet` (sphere, cuboid, rotated cuboid), the pi0 branching
-ratios, the Sanford-Wang density and the BMPT invariant cross section. `tests/test_v0.py` compares the JAX port with
+ratios, the Sanford-Wang density, the BMPT invariant cross section, and for proton brem `wpp`, `d2N_proton_brem_to_V`
+and `V_prod_rate` (the `Proton_Brem_Distribution` constructor also prints a bare `proton_brem` line, which the test
+ignores). `tests/test_v0.py` compares the JAX port with
 it at the V0 tolerances: (1e-12 + 64 eps x condition number) relative for closed-form functions (the condition number
 covers cancellation, where clang's default FMA contraction and XLA round differently), 1e-9 m for `Ldet`. It skips
 when `v0_dump.txt` is absent. The committed `v0_dump.txt` comes from a stock build of `RobMina/BdNMC` `bf45d75`.
