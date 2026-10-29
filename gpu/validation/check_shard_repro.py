@@ -30,7 +30,8 @@ def main():
     blocks = range(b0, min(b0 + args.blocks, old["blocks"][1]))
     root = Path(__file__).resolve().parents[1]
     card = root / "phase0" / "cards" / "ref" / Path(old["card"]).name  # the saved path may be from another host
-    new = pipeline.candidates(card, old["n_trials"], old["seed"], blocks)
+    new = pipeline.candidates(card, old["n_trials"], old["seed"], blocks,
+                              parent_sampler=old.get("parent_sampler", "stock"))
     oc = {k: v[np.isin(old["candidates"]["block"], list(blocks))] for k, v in old["candidates"].items()}
     nc = new["candidates"]
     if len(nc["prob"]) != len(oc["prob"]) or any((nc[k] != oc[k]).any() for k in INDEX_KEYS):

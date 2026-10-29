@@ -17,9 +17,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from bdnmc_jax import card as cardmod, pipeline, rng  # noqa: E402
 
 
-def device_only(card_path, batch, cap, n_calls):
+def device_only(card_path, batch, cap, n_calls, parent_sampler):
     card = cardmod.parse_card(card_path)
-    det, sc, (ch,) = pipeline.setup(card)
+    det, sc, (ch,) = pipeline.setup(card, parent_sampler)
     nv = jnp.full(batch, rng.BLOCK)
     call = lambda i: pipeline.blocks_batch(det, sc, ch, card.e_density, card.seed, 0,  # noqa: E731
                                            jnp.arange(i * batch, (i + 1) * batch), nv, cap)
@@ -36,19 +36,22 @@ def main():
     ap.add_argument("n_trials", type=int)
     ap.add_argument("--batch", type=int, nargs="+", default=[1, 4, 16])
     ap.add_argument("--cap", type=int, default=1024)
+    ap.add_argument("--parent-sampler", default="stock", choices=pipeline.PARENT_SAMPLERS)
     ap.add_argument("--json", type=Path)
     args = ap.parse_args()
-    out = {"card": str(args.card), "n_trials": args.n_trials, "backend": jax.default_backend(),
+    kw = {"parent_sampler": args.parent_sampler}
+    out = {"card": str(args.card), "n_trials": args.n_trials, "parent_sampler": args.parent_sampler,
+           "backend": jax.default_backend(),
            "device": jax.devices()[0].device_kind, "jax": jax.__version__, "runs": []}
     for b in args.batch:
         t = time.perf_counter()
-        warm = pipeline.candidates(args.card, b * rng.BLOCK, batch=b, cap=args.cap)  # compile (and cap growth)
+        warm = pipeline.candidates(args.card, b * rng.BLOCK, batch=b, cap=args.cap, **kw)  # compile, cap growth
         t_warm = time.perf_counter() - t
         cap = warm["cap"]
         t = time.perf_counter()
-        res = pipeline.finish(pipeline.candidates(args.card, args.n_trials, batch=b, cap=cap))
+        res = pipeline.finish(pipeline.candidates(args.card, args.n_trials, batch=b, cap=cap, **kw))
         dt = time.perf_counter() - t
-        dev = device_only(args.card, b, cap, max(2, min(50, args.n_trials // (b * rng.BLOCK))))
+        dev = device_only(args.card, b, cap, max(2, min(50, args.n_trials // (b * rng.BLOCK))), args.parent_sampler)
         r = {"batch": b, "cap": cap, "first_call_s": t_warm, "wall_s": dt, "trials_per_s": res["trials"] / dt,
              "candidates_per_s": res["n_hits"] / dt, "accepted": res["accepted"], "accepted_per_s": res["accepted"] / dt,
              "device_only_trials_per_s": dev}

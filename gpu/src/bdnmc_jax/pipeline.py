@@ -11,7 +11,7 @@ their recoil electron, interaction point and acceptance uniform already drawn. P
 maximum and accepts. Weighted mode is the same pass 1 with every candidate kept, weight = its probability.
 """
 from dataclasses import dataclass
-from functools import partial
+from functools import lru_cache, partial
 
 import jax
 import jax.numpy as jnp
@@ -39,8 +39,19 @@ jax.tree_util.register_dataclass(Channel, data_fields=["m_meson", "fmax", "vnum"
                                  meta_fields=["name", "dist"])
 
 
-def setup(card):
-    """Build the detector, signal model and channels from a card; refuse what is not ported."""
+@lru_cache(maxsize=None)
+def _envelope(dist):
+    return parents.make_envelope(dist)
+
+
+PARENT_SAMPLERS = ("stock", "envelope")
+
+
+def setup(card, parent_sampler="stock"):
+    """Build the detector, signal model and channels from a card; refuse what is not ported. `parent_sampler`:
+    "stock" (stock's proposal against one bar) or "envelope" (the same law, piecewise bound; parents.Envelope)."""
+    if parent_sampler not in PARENT_SAMPLERS:
+        raise ValueError(f"parent_sampler {parent_sampler!r} not in {PARENT_SAMPLERS}")
     if card.model not in ("Dark_Photon", "Dark_Photon_DM"):
         raise NotImplementedError(f"model {card.model}")
     if card.signal_channel != "NCE_electron":
@@ -70,6 +81,8 @@ def setup(card):
             fmax = dist.find_fmax()
         else:
             raise NotImplementedError(f"distribution {ch.production_distribution}")
+        if parent_sampler == "envelope":
+            dist, fmax = _envelope(dist), 1.0
         vnum = br * card.pot * ch.meson_per_pi0 * card.pi0_per_pot  # Kinetic_Mixing.cpp:141
         chans.append(Channel(ch.production_channel, MASS_PION_NEUTRAL, dist, float(fmax), vnum,
                              card.mass_v, card.mass_dm))
@@ -160,14 +173,14 @@ CANDIDATE_KEYS = ("block", "trial", "slot", "prob", "u_acc", "ang_ok", "dm", "el
                   "parent", "mediator", "L")
 
 
-def candidates(card_path, n_trials, seed=None, blocks=None, batch=8, cap=1024):
+def candidates(card_path, n_trials, seed=None, blocks=None, batch=8, cap=1024, parent_sampler="stock"):
     """Pass 1 over blocks `blocks` (a range; default all blocks of n_trials), `batch` blocks per device call.
     Shards over disjoint block ranges combine exactly into the full run, because each block's random numbers
     depend only on (seed, block). `cap` is the starting number of candidate rows kept per block: a batch with a
     block above it is rerun with the cap doubled (one recompile), which changes only the padding."""
     card = cardmod.parse_card(card_path)
     seed = card.seed if seed is None else seed
-    det, sc, (ch,) = setup(card)
+    det, sc, (ch,) = setup(card, parent_sampler)
     nblocks = -(-n_trials // rng.BLOCK)
     blocks = range(nblocks) if blocks is None else blocks
     if blocks.start < 0 or blocks.stop > nblocks:
@@ -216,14 +229,16 @@ def candidates(card_path, n_trials, seed=None, blocks=None, batch=8, cap=1024):
     trials = sum(min(rng.BLOCK, n_trials - b * rng.BLOCK) for b in blocks)
     return {"card": str(card_path), "seed": seed, "n_trials": n_trials, "blocks": [blocks.start, blocks.stop],
             "trials": trials, "n_hits": n_hits, "prob_sum": prob_sum, "parent_over_bar": over_bar,
-            "vnum": ch.vnum, "efficiency": card.efficiency, "batch": batch, "cap": cap, "candidates": cat}
+            "vnum": ch.vnum, "efficiency": card.efficiency, "batch": batch, "cap": cap,
+            "parent_sampler": parent_sampler, "candidates": cat}
 
 
 def merge(shards):
     """Combine pass-1 shards of one run (disjoint block ranges, same card, seed and n_trials)."""
     first = shards[0]
+    run_id = lambda s: (s["card"], s["seed"], s["n_trials"], s.get("parent_sampler", "stock"))  # noqa: E731
     for s in shards:
-        if (s["card"], s["seed"], s["n_trials"]) != (first["card"], first["seed"], first["n_trials"]):
+        if run_id(s) != run_id(first):
             raise ValueError("shards from different runs")
     blocks = sorted(b for s in shards for b in range(*s["blocks"]))
     if len(blocks) != len(set(blocks)):

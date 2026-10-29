@@ -1,6 +1,6 @@
 """Run pass 1 of the JAX port over a block range of one card and save the shard.
 
-Usage: run_port.py <card> <n_trials> <block_start> <block_stop> <out.npz> [--seed S]
+Usage: run_port.py <card> <n_trials> <block_start> <block_stop> <out.npz> [--seed S] [--parent-sampler stock|envelope]
 On CPU, run with XLA_FLAGS=--xla_cpu_multi_thread_eigen=false so one shard uses about one core.
 """
 import argparse
@@ -22,12 +22,14 @@ def main():
     ap.add_argument("block_stop", type=int)
     ap.add_argument("out", type=Path)
     ap.add_argument("--seed", type=int)
+    ap.add_argument("--parent-sampler", default="stock", choices=pipeline.PARENT_SAMPLERS)
     args = ap.parse_args()
     if args.out.exists():
         sys.exit(f"output exists, not overwriting: {args.out}")
     t0 = time.process_time()
     w0 = time.time()
-    res = pipeline.candidates(args.card, args.n_trials, args.seed, range(args.block_start, args.block_stop))
+    res = pipeline.candidates(args.card, args.n_trials, args.seed, range(args.block_start, args.block_stop),
+                              parent_sampler=args.parent_sampler)
     res["cpu_s"] = time.process_time() - t0
     res["wall_s"] = time.time() - w0
     res["backend"] = jax.default_backend()

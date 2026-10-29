@@ -11,8 +11,17 @@ Stock samples both by rejection, and the bar differs:
   factor until xR <= 1) is stock's and is kept.
 
 Each sampler returns momenta (n, 3) = (px, py, pz); parents start at the origin with t = 0.
+
+Both stock samplers are a uniform proposal on a rectangle in (p, v), accepted against a fixed bar:
+- Sanford-Wang: v = theta / (pi/2), density min(f, 54.25).
+- BMPT: v = theta / theta*(p), density f(p, v theta*(p)). xR is affine in cos(theta), so stock's shrink loop stops
+  at the first theta below theta*(p) (where xR = 1); its factors are uniform, so the overshoot of log(theta) is
+  Exp(1) and theta given p is exactly Uniform(0, theta*(p)).
+`Envelope` samples the same law with a piecewise-constant bound on a (p, v) grid instead of one bar (exact
+rejection; much higher acceptance). It draws different random numbers, so it is opt-in.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import hashlib
 import math
 
 import jax
@@ -53,6 +62,17 @@ class SanfordWang:
         th = 0 + (pi / 2.0 - 0) * u[:, 0]
         p = 0 + (self.ppimax - 0) * u[:, 1]
         return jnp.stack([p, th], axis=-1), self.density(p, th)
+
+    # (p, v) coordinates of the stock law, for Envelope
+    @property
+    def p_range(self):
+        return self.ppimax
+
+    def theta_of(self, p, v):
+        return v * (pi / 2.0)
+
+    def uv_density(self, p, v):
+        return jnp.minimum(self.density(p, self.theta_of(p, v)), self.fmax)
 
 
 # --- BMPT --------------------------------------------------------------------------------------------------------
@@ -134,6 +154,26 @@ class BMPT:
         f = jnp.where(self.xR(p, th) > 1, jnp.inf, f)
         return jnp.stack([p, th], axis=-1), f
 
+    # (p, v) coordinates of the stock law, for Envelope
+    @property
+    def p_range(self):
+        return self.p_max
+
+    def cos_theta_star(self, p):
+        """cos(theta) at which xR(p, theta) = 1 (xR decreases as cos(theta) grows); > 1 means no valid theta."""
+        E, M = self.beam_energy, self.meson_mass
+        Ep = jnp.sqrt(p * p + M ** 2)
+        return (-2 * mp * mp - 2 * E * mp + 2 * (E + mp) * Ep + _MXBAR ** 2 - M ** 2) / (
+            2 * math.sqrt(E ** 2 - mp * mp) * p)
+
+    def theta_of(self, p, v):
+        th_star = jnp.where(self.cos_theta_star(p) <= math.cos(self.theta_max), self.theta_max,
+                            jnp.arccos(jnp.clip(self.cos_theta_star(p), -1.0, 1.0)))
+        return v * th_star
+
+    def uv_density(self, p, v):
+        return self.density(p, self.theta_of(p, v))
+
     def find_fmax(self, n_p=2000, n_th=2000):
         """Grid maximum of the density over p in (0, p_max], theta in (0, pi/2] with xR <= 1, times `margin`."""
         p = np.linspace(self.p_max / n_p, self.p_max, n_p)
@@ -151,11 +191,80 @@ class BMPT:
         return best * self.margin
 
 
+# --- envelope sampler --------------------------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Envelope:
+    """Exact rejection sampling of a base distribution's stock law with a piecewise-constant bound on a (p, v) grid:
+    choose a cell with probability bound x area, propose uniformly in it, accept with density / bound. The tables
+    are compile-time constants (they depend on beam and target only); equality and hashing go by their digest.
+    `propose` returns f / bound, so `rejection` runs with fmax = 1 and counts any f > bound as over the bar (a
+    failure: the bound missed a peak)."""
+    base: object
+    digest: str
+    efficiency: float
+    p_lo: np.ndarray = field(compare=False, repr=False)
+    dp: np.ndarray = field(compare=False, repr=False)
+    v_lo: np.ndarray = field(compare=False, repr=False)
+    dv: np.ndarray = field(compare=False, repr=False)
+    bound: np.ndarray = field(compare=False, repr=False)
+    cdf: np.ndarray = field(compare=False, repr=False)
+
+    def propose(self, key, pool):
+        u = jax.random.uniform(key, (pool, 3), dtype=jnp.float64)
+        n_v = len(self.v_lo)
+        cell = jnp.minimum(jnp.searchsorted(jnp.asarray(self.cdf), u[:, 0], side="right"), len(self.cdf) - 1)
+        ip, iv = cell // n_v, cell % n_v
+        p = jnp.asarray(self.p_lo)[ip] + u[:, 1] * jnp.asarray(self.dp)[ip]
+        v = jnp.asarray(self.v_lo)[iv] + u[:, 2] * jnp.asarray(self.dv)[iv]
+        f = self.base.uv_density(p, v) / jnp.asarray(self.bound)[cell]
+        return jnp.stack([p, self.base.theta_of(p, v)], axis=-1), jnp.where(jnp.isfinite(f), f, jnp.inf)
+
+
+def make_envelope(base, n_p=256, n_v=128, v_min=1e-5, n_sub=6, margin=1.2, n_check=2_000_000, seed=0):
+    """Build the Envelope of `base` (SanfordWang or BMPT): p in n_p equal bins, v in [0, v_min] plus n_v geometric
+    bins up to 1; each cell's bound is the maximum on an n_sub x n_sub sub-grid (edges included) x margin. Checked
+    on n_check random points; raises if any exceeds its bound, or if some p has no valid theta (BMPT)."""
+    p_e = np.linspace(0.0, base.p_range, n_p + 1)
+    v_e = np.concatenate([[0.0], np.geomspace(v_min, 1.0, n_v)])
+    if isinstance(base, BMPT) and np.asarray(base.cos_theta_star(jnp.asarray(p_e[1:]))).max() > 1:
+        raise NotImplementedError("BMPT: some p below p_max has no theta with xR <= 1 (stock would not terminate)")
+    s = np.linspace(0.0, 1.0, n_sub)
+    P = (p_e[:-1, None, None, None] + np.diff(p_e)[:, None, None, None] * s[None, None, :, None])
+    V = (v_e[None, :-1, None, None] + np.diff(v_e)[None, :, None, None] * s[None, None, None, :])
+    P, V = np.broadcast_arrays(P, V)
+    f = np.asarray(base.uv_density(jnp.asarray(P), jnp.asarray(V)))
+    f = np.where(np.isfinite(f), f, 0.0)
+    cmax, cmean = f.max(axis=(2, 3)), f.mean(axis=(2, 3))
+    area = np.diff(p_e)[:, None] * np.diff(v_e)[None, :]
+    bound = np.maximum(cmax * margin, np.finfo(float).tiny).ravel()
+    w = bound * area.ravel()
+    cdf = np.cumsum(w) / w.sum()
+    env = Envelope(base, "", float((cmean * area).sum() / w.sum()),
+                   p_e[:-1].copy(), np.diff(p_e), v_e[:-1].copy(), np.diff(v_e), bound, cdf)
+    digest = hashlib.sha256(b"".join(a.tobytes() for a in (env.p_lo, env.dp, env.v_lo, env.dv, bound, cdf))).hexdigest()
+    env = Envelope(base, digest, env.efficiency, env.p_lo, env.dp, env.v_lo, env.dv, bound, cdf)
+    # Check the bound on random points, cell by cell (uniform within cells, cells chosen like the sampler does).
+    rs = np.random.default_rng(seed)
+    cell = np.minimum(np.searchsorted(cdf, rs.random(n_check), side="right"), len(cdf) - 1)
+    ip, iv = cell // n_v, cell % n_v
+    pp = env.p_lo[ip] + rs.random(n_check) * env.dp[ip]
+    vv = env.v_lo[iv] + rs.random(n_check) * env.dv[iv]
+    ratio = np.asarray(base.uv_density(jnp.asarray(pp), jnp.asarray(vv))) / bound[cell]
+    if not (np.nan_to_num(ratio, nan=0.0) <= 1).all():
+        raise RuntimeError(f"envelope bound exceeded on {int((ratio > 1).sum())} of {n_check} check points "
+                           f"(max ratio {np.nanmax(ratio):.3f}); raise margin or refine the grid")
+    return env
+
+
 # --- driver ------------------------------------------------------------------------------------------------------
 
 def sample_block(dist, key, n, fmax, m_meson, pool=None):
-    """n parent four-momenta (n, 4) for one block, with diagnostics."""
-    pool = pool or n
+    """n parent four-momenta (n, 4) for one block, with diagnostics. Default pool: n per round for the stock
+    samplers (low acceptance: many rounds anyway); for an Envelope, enough that one round usually fills the block
+    (a short round is followed by another, so this only sets the cost, not the law)."""
+    if pool is None:
+        pool = -(-int(1.1 * n / dist.efficiency) // 4096) * 4096 if isinstance(dist, Envelope) else n
     x, filled, nprop, nover = rng.rejection(jax.random.fold_in(key, rng.PARENT), dist.propose, fmax, n, pool)
     ph = 2 * pi * rng.uniform(key, rng.PARENT_PHI, (n,))  # Flat(0, 2 pi), drawn after acceptance in stock
     mom = polar(x[:, 0], x[:, 1], ph)
