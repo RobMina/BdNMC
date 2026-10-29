@@ -1,25 +1,48 @@
 # bdnmc-jax: a batched (JAX) port of BdNMC
 
-A JAX port of BdNMC's generators that runs on GPUs (and on CPUs), validated statistically against stock BdNMC
-with generic, experiment-independent parameter cards. Work in progress: the Phase 1 scope below is implemented and
-validated on CPU; GPU validation and timing are next.
+A JAX port of BdNMC's generators that runs on GPUs and CPUs, validated statistically against stock BdNMC with
+generic, experiment-independent parameter cards.
 
-**Implemented:** card parser (stock quirks included), sphere and cuboid detectors, `NCE_electron` (`sigma2`,
-`dsigmadEe`, recoil sampler), pi0 branching ratios and `Vnum` (stock's own integrator), on-shell `DecayDM`,
-Sanford-Wang and BMPT pi0 production, a counter-based RNG (key = seed, channel, 2^16-trial block, stage, round) and a
-two-pass pipeline that unweights against the global maximum. Cards using anything else (brem, eta, off-shell
-decays, other detectors, timing cuts) are refused.
+**Status:**
+- **Validated:** pi0-decay dark-photon production with Sanford-Wang or BMPT parents, on-shell decays, sphere and
+  cuboid detectors and `NCE_electron` scattering pass the V0, V1 and V2 tests on CPU and on an NVIDIA A100. The
+  A100 gives the same counts as the CPU.
+- **Throughput:** 126x one core of stock `-O2` on the Sanford-Wang card and 86x on the BMPT card, in accepted
+  events per second, before output is written.
+- **Not yet ported:** other channels, models and signals, and event-file output.
+
+| Page | Content |
+|---|---|
+| [docs/install-and-quickstart.md](../docs/install-and-quickstart.md) | install (CPU and GPU), quickstart, Python API, which card settings the port accepts |
+| [docs/parameter-card.md](../docs/parameter-card.md) | every parameter-card option of stock BdNMC |
+| [docs/gpu-validation.md](../docs/gpu-validation.md) | physics validation: method, stock reference sets, V0/V1/V2 results, reproducibility |
+| [docs/gpu-performance.md](../docs/gpu-performance.md) | stock and port throughput, profile |
+| [docs/test-environments.md](../docs/test-environments.md) | the hardware and software the tests ran on |
+
+**Design** (option A of the plan: stock's physics and samplers, batched):
+- **Blocks:** trials run in blocks of 2^16. Each block's random numbers depend only on (seed, channel, block), so
+  results do not depend on the batch size, the device or how a run is split into shards.
+- **Pass 1** keeps every DM that reaches the detector, with its recoil electron already drawn.
+- **Pass 2** unweights against the maximum scatter probability of the whole run, so the unweighted prediction is
+  free of stock's running-maximum bias.
+- **No recompile per mass:** masses and couplings are runtime inputs.
+- **Parent sampler:** `parent_sampler="envelope"` is an opt-in parent sampler for the same law with much higher
+  acceptance. It has not passed V2 yet.
 
 | Path | Role |
 |---|---|
 | `src/bdnmc_jax/` | the port: `card`, `detector`, `electron`, `branching`, `kinematics`, `decay`, `parents`, `rng`, `pipeline`, `shards` |
+| `examples/quickstart.py` | run one card and print the predicted signal events |
 | `tests/` | pytest (`python -m pytest`); `test_v0.py` needs `v0/v0_dump.txt` |
 | `v0/` | V0 harness: C++ dump of stock function values, and its output `v0_dump.txt` (`v0/README.md`) |
 | `phase0/cards/` | the four generic base cards; `ref/` (stock unweighted reference, 16 points), `ref_w/` (weighted replicas), `ref_wl/` (long weighted runs), each with the generator script that wrote it |
 | `phase0/run_stock.sh` | `run_stock.sh <build> <card-stem>`: one card through a stock build in `stock/<build>/` (not in the repo), outputs in `phase0/out/` |
-| `phase0/bias_weighted.py`, `phase0/compare_long_weighted.py` | stock unweighted `se` against stock weighted `se` (running-pMax bias), and BMPT run-length bias |
+| `phase0/bias_weighted.py`, `phase0/compare_long_weighted.py` | stock unweighted against weighted `se` (running-pMax bias), and BMPT's run-length bias |
 | `validation/v_config.json` | V1/V2 thresholds and binning, frozen before the first port-against-stock comparison |
 | `validation/run_v_set.sh`, `run_port.py`, `extract_stock.py`, `compare_v.py` | V1 (normalisation) and V2 (distributions) of the port against the stock reference sets |
+| `validation/check_shard_repro.py` | rerun blocks of a saved shard and compare (code changes, CPU against GPU) |
+| `validation/compare_parent_samplers.py` | high-statistics check of the envelope parent sampler against the stock proposal |
+| `validation/bench.py`, `validation/profile_port.py` | throughput (compile, steady state, device only) and where the time goes |
 
 Outputs (`phase0/out/`, `validation/out/`), stock builds (`stock/`) and the virtual environment (`.venv/`) are not
-tracked. Pinned Python versions: `requirements-lock.txt`.
+tracked. Pinned Python versions for the CPU environment: `requirements-lock.txt`.
