@@ -19,6 +19,9 @@ TRIALS = {  # base card stem -> total weighted trials per reference point, split
     # shrinks with run length (5e6-trial pi0 replicas came out 0.2 % low), so its replicas are 2.5e7 trials each.
     "mb_eta_m005": 500_000_000,
     "he_eta_cuboid_m005": 200_000_000,
+    # particle_list (appended): no parent sampler, so no running-maximum bias in the parents
+    "mb_list_m005": 500_000_000,
+    "he_list_cuboid_m005": 40_000_000,
 }
 MASSES_MEV = [1, 5, 20, 45]
 SEED0 = 2026102900

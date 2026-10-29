@@ -16,9 +16,11 @@ out=$here/out/$stem/$build${TAG:+_$TAG}
 mkdir -p "$out"
 [[ -e $out/events.dat ]] && { echo "output exists, not overwriting: $out" >&2; exit 1; }
 
-# Redirect the card's outputs into this build's directory.
+# Redirect the card's outputs into this build's directory; a relative particle_list_file is relative to gpu/
+# (where the port runs), so make it absolute for stock, which runs from the source root.
 sed -e "s#^output_file .*#output_file $out/events.dat#" \
-    -e "s#^summary_file .*#summary_file $out/summary.dat#" "$card" > "$out/card.dat"
+    -e "s#^summary_file .*#summary_file $out/summary.dat#" \
+    -e "s#^particle_list_file \([^/].*\)#particle_list_file $root/\1#" "$card" > "$out/card.dat"
 
 # BdNMC opens data/*.dat relative to the working directory, so run from the source root.
 cd "$src"

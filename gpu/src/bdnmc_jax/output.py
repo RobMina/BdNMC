@@ -13,8 +13,10 @@ Text (`write_text`) follows main.cpp and Particle::report:
 - at the end, ` Summary <se> <m_V> <m_chi> <epsilon> <alpha_D> <signal> <POT> <efficiency> <events> `.
 
 Particle fields as stock fills them:
-- parent `pion` and `V`: origin and end zero;
-- `DM`: origin zero, end = interaction point; the last two fields are the distances to the detector entry and exit;
+- parent `pion` and `V`: origin and end zero, or both the list row's position for `particle_list` with
+  `particle_list_position true`;
+- `DM`: origin the same as the parent's, end = interaction point; the last two fields are the distances to the
+  detector entry and exit;
 - `Recoil_DM` and `electron`: origin = interaction point, end zero.
 
 Two deliberate differences, both documented in docs/install-and-quickstart.md:
@@ -96,12 +98,13 @@ def write_text(res, path, summary_path=None, run=None):
             # weighted: stock prints the event's scatter probability (pMax, reset per DM) after the event number
             head = f"event {event[i]}" + (f" {_g10(c['prob'][r0])}" if res.get("weighted") else "")
             lines = [head + "\n"]
+            o = tuple(c["origin"][r0]) if "origin" in c else zero4
             if parent is not None:
-                lines.append(_particle(parent[0], c["parent"][r0], parent[1], zero4, zero4))
-            lines.append(_particle("V", c["mediator"][r0], card.mass_v, zero4, zero4))
+                lines.append(_particle(parent[0], c["parent"][r0], parent[1], o, o))
+            lines.append(_particle("V", c["mediator"][r0], card.mass_v, o, o))
             for r in rows[i:j]:
                 v = tuple(c["vertex"][r])
-                lines.append(_particle("DM", c["dm"][r], card.mass_dm, zero4, v, tuple(c["crossing"][r])))
+                lines.append(_particle("DM", c["dm"][r], card.mass_dm, o, v, tuple(c["crossing"][r])))
                 lines.append(_particle("Recoil_DM", c["recoil_dm"][r], card.mass_dm, v, zero4))
                 lines.append(_particle("electron", c["electron"][r], MASS_ELECTRON, v, zero4))
             lines.append(f"endevent {event[i]}\n\n")
@@ -138,7 +141,7 @@ def write_hdf5(res, path, extra_attrs=None):
         g["event"] = event
         g["weight"] = row_weights(res, rows)
         for k in ("block", "trial", "slot", "prob", "L", "dm", "electron", "recoil_dm", "vertex", "parent", "mediator",
-                  "crossing"):
+                  "crossing", "origin"):
             if k in c:
                 g[k] = np.asarray(c[k])[rows]
     return len(rows)

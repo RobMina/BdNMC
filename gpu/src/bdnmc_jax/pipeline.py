@@ -17,7 +17,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from . import branching, brem, card as cardmod, decay, detector, electron, parents, rng
+from . import branching, brem, card as cardmod, decay, detector, electron, parents, particle_list, rng
 from .constants import MASS_ELECTRON as Me, MASS_PION_NEUTRAL, MASS_ETA, pi, speed_of_light
 from .kinematics import momentum, phi, rotate_y, rotate_z, theta
 
@@ -31,12 +31,15 @@ class Channel:
     vnum: float
     m_v: float
     m_dm: float
-    kind: str = "meson"  # "meson": meson -> gamma V(-> chi chi); "brem": proton bremsstrahlung V -> chi chi
+    # "meson": meson -> gamma V(-> chi chi); "list": the same with parents from a particle_list file;
+    # "brem": proton bremsstrahlung V -> chi chi
+    kind: str = "meson"
+    rows: object = None  # particle_list rows (N, 7), kind "list" only
 
 
-# Masses, the sampler bar and Vnum are traced leaves under jit (no recompile per mass, goal P2); the name, the
-# parent distribution (beam, target and the brem window only) and the kind are static.
-jax.tree_util.register_dataclass(Channel, data_fields=["m_meson", "fmax", "vnum", "m_v", "m_dm"],
+# Masses, the sampler bar, Vnum and the list rows are traced leaves under jit (no recompile per mass, goal P2); the
+# name, the parent distribution (beam, target and the brem window; a list's path and length) and the kind are static.
+jax.tree_util.register_dataclass(Channel, data_fields=["m_meson", "fmax", "vnum", "m_v", "m_dm", "rows"],
                                  meta_fields=["name", "dist", "kind"])
 
 
@@ -77,13 +80,17 @@ def setup(card, parent_sampler="stock"):
         if ch.production_channel not in MESONS:
             raise NotImplementedError(f"channel {ch.production_channel} with {ch.production_distribution}")
         m_meson, channel_br, dists = MESONS[ch.production_channel]
-        if ch.production_distribution not in dists:
+        if ch.production_distribution not in dists + ("particle_list",):
             raise NotImplementedError(f"{ch.production_channel} with {ch.production_distribution}")
         br, off = channel_br(card.mass_v, card.mass_dm, card.epsilon, card.alpha_d)
         if not branching.uses_on_shell_decay(off, card.mass_v, card.mass_dm, m_meson):
             raise NotImplementedError(f"off-shell {ch.production_channel}")
         if br <= 0:
             raise NotImplementedError(f"{ch.production_channel} closed (2 m_chi > meson mass)")
+        vnum = br * card.pot * ch.meson_per_pi0 * card.pi0_per_pot  # Kinetic_Mixing.cpp:141
+        if ch.production_distribution == "particle_list":
+            chans.append(_list_channel(ch, parent_sampler, m_meson, vnum, card))
+            continue
         if ch.production_distribution in ("pi0_sanfordwang", "k0_sanfordwang"):
             if "sanfordwang_file" in ch.raw or "distribution_parameter_file" in ch.raw:
                 raise NotImplementedError("Sanford-Wang parameter file")
@@ -99,12 +106,23 @@ def setup(card, parent_sampler="stock"):
             raise NotImplementedError(f"distribution {ch.production_distribution}")
         if parent_sampler == "envelope":
             dist, fmax = _envelope(dist), 1.0
-        vnum = br * card.pot * ch.meson_per_pi0 * card.pi0_per_pot  # Kinetic_Mixing.cpp:141
         chans.append(Channel(ch.production_channel, m_meson, dist, float(fmax), vnum,
                              card.mass_v, card.mass_dm))
     if len(chans) != 1:
         raise NotImplementedError("exactly one production channel for now")
     return det, sc, chans
+
+
+def _list_channel(ch, parent_sampler, m_meson, vnum, card):
+    """Meson decay with parents from `particle_list_file` (Model.cpp:131-146; particle_list.py)."""
+    if parent_sampler != "stock":
+        raise NotImplementedError("parent_sampler applies to the analytic distributions, not to particle_list")
+    if "particle_list_file" not in ch.raw:
+        raise ValueError("particle_list_file undefined for production_distribution particle_list")
+    position = ch.raw.get("particle_list_position", "").lower() == "true"  # Parameter.cpp:239
+    dist, rows = particle_list.load(ch.raw["particle_list_file"], position)
+    return Channel(ch.production_channel, m_meson, dist, 0.0, vnum, card.mass_v, card.mass_dm, kind="list",
+                   rows=jnp.asarray(rows))
 
 
 def _brem_channel(card, ch, parent_sampler):
@@ -120,11 +138,11 @@ def _brem_channel(card, ch, parent_sampler):
                    card.mass_v, card.mass_dm, kind="brem")
 
 
-def _recoil(sc, key, key_phi, dm, live, u_pos, t_in, t_out, max_rounds=10_000):
+def _recoil(sc, key, key_phi, dm, live, u_pos, t_in, t_out, origin=None, max_rounds=10_000):
     """Electron_Scatter::scatterevent + the bookkeeping of probscatter(partlist): recoil electron, Recoil_DM and
-    the interaction point, for each candidate DM (rows of dm (k, 4)). Only `live` rows (prob > 0) are sampled:
-    stock never calls scatterevent for a zero-probability DM, whose energy window may be empty (then the recoil
-    would be outside the kinematic range and ThetaEe NaN)."""
+    the interaction point, for each candidate DM (rows of dm (k, 4); `origin` (k, 4) x, y, z, t, default zero).
+    Only `live` rows (prob > 0) are sampled: stock never calls scatterevent for a zero-probability DM, whose energy
+    window may be empty (then the recoil would be outside the kinematic range and ThetaEe NaN)."""
     E = dm[:, 0]
     lo, hi = electron.scat_min(sc, E), electron.scat_max(sc, E)
     dmax = electron.dsigma_dEe(lo, E, sc.m_dm, sc.m_v, sc.kappa, sc.alpha_d)
@@ -150,12 +168,16 @@ def _recoil(sc, key, key_phi, dm, live, u_pos, t_in, t_out, max_rounds=10_000):
     e4 = rotate_z(rotate_y(e4, theta(dm)), phi(dm))
     rp = dm[:, 1:] - e4[:, 1:]
     r4 = jnp.concatenate([jnp.sqrt(sc.m_dm ** 2 + rp[:, 0] ** 2 + rp[:, 1] ** 2 + rp[:, 2] ** 2)[:, None], rp], axis=-1)
-    # Particle::Generate_Position: u in [crossing0, crossing1]; DM origin is (0,0,0,0) for these parents.
+    # Particle::Generate_Position: u in [crossing0, crossing1], then Set_Time.
     t = t_in + (t_out - t_in) * u_pos
     mom = momentum(dm)
     speed = mom / dm[:, 0]
     time = mom * t / speed / speed_of_light
-    pos = (time * speed * speed_of_light)[:, None] * dm[:, 1:] / mom[:, None]
+    if origin is None:  # DM origin (0,0,0,0)
+        pos = (time * speed * speed_of_light)[:, None] * dm[:, 1:] / mom[:, None]
+    else:
+        time = time + origin[:, 3]
+        pos = ((time - origin[:, 3]) * speed * speed_of_light)[:, None] * dm[:, 1:] / mom[:, None] + origin[:, :3]
     ang_ok = ((sc.min_angle <= 0) | (theta(e4) > sc.min_angle)) & ((sc.max_angle > 2 * pi) | (theta(e4) < sc.max_angle))
     return e4, r4, jnp.concatenate([pos, time[:, None]], axis=-1), ang_ok & live, done
 
@@ -164,7 +186,13 @@ def _block(det, sc, ch, e_density, seed, chan_index, block_index, n_valid, cap):
     """Pass 1 for one block. Returns per-block sums and up to `cap` candidates (fixed shape, `count` valid)."""
     n = rng.BLOCK
     key = rng.block_key(seed, chan_index, block_index)
-    if ch.kind == "brem":
+    origin = None
+    if ch.kind == "list":
+        par, origin = particle_list.block(ch.rows, block_index, n, ch.m_meson)
+        pinfo = {"filled": jnp.asarray(n), "proposed": jnp.asarray(n), "over_bar": jnp.asarray(0)}
+        u = rng.uniform(key, rng.DECAY, (n, 4))
+        med, d1, d2 = decay.decay_dm(par, ch.m_meson, ch.m_v, ch.m_dm, u[:, 0], u[:, 1], u[:, 2], u[:, 3])
+    elif ch.kind == "brem":
         med, pinfo = brem.sample_block(ch.dist, key, n, ch.fmax, ch.m_v)
         par = med  # no meson: the V is the parent of the event
         u = rng.uniform(key, rng.DECAY, (n, 2))
@@ -175,7 +203,8 @@ def _block(det, sc, ch, e_density, seed, chan_index, block_index, n_valid, cap):
         med, d1, d2 = decay.decay_dm(par, ch.m_meson, ch.m_v, ch.m_dm, u[:, 0], u[:, 1], u[:, 2], u[:, 3])
     valid = jnp.arange(n) < n_valid
     dm = jnp.concatenate([d1, d2])  # candidate slot = dm index * n + trial index
-    L, t_in, t_out = detector.ldet(det, jnp.zeros((2 * n, 3)), dm[:, 1:])
+    origin2 = None if origin is None else jnp.concatenate([origin, origin])
+    L, t_in, t_out = detector.ldet(det, jnp.zeros((2 * n, 3)) if origin is None else origin2[:, :3], dm[:, 1:])
     hit = (L > 0) & jnp.concatenate([valid, valid])
     if ch.kind == "brem":
         # V_decay_gen::GenDM tests `det_int(dm1) > 0 || det_int(dm2) > 0`: the second DM is kept only when the
@@ -190,15 +219,19 @@ def _block(det, sc, ch, e_density, seed, chan_index, block_index, n_valid, cap):
     u_pos = rng.uniform(key, rng.POSITION, (2 * n,))[safe]
     live = prob[safe] > 0
     e4, r4, vtx, ang_ok, recoil_done = _recoil(sc, jax.random.fold_in(key, rng.RECOIL),
-                                               jax.random.fold_in(key, rng.RECOIL_PHI), cdm, live, u_pos, ct_in, ct_out)
+                                               jax.random.fold_in(key, rng.RECOIL_PHI), cdm, live, u_pos, ct_in, ct_out,
+                                               None if origin is None else origin2[safe])
     trial = safe % n
-    return {
+    out = {
         "count": count, "prob_sum": jnp.sum(prob), "parent_info": pinfo,
         "slot": idx, "trial": trial, "prob": prob[safe], "u_acc": u_acc, "ang_ok": ang_ok,
         "recoil_done": recoil_done, "dm": cdm, "electron": e4, "recoil_dm": r4, "vertex": vtx,
         "parent": par[trial], "mediator": med[trial], "L": L[safe],
         "crossing": jnp.stack([ct_in, ct_out], axis=-1),  # stock's Particle::crossing (entry, exit); p x t is metres
     }
+    if origin is not None:
+        out["origin"] = origin[trial]  # parent origin = V origin = DM origin (x, y, z, t)
+    return out
 
 
 @partial(jax.jit, static_argnames=("det", "cap"))
@@ -210,7 +243,7 @@ def blocks_batch(det, sc, ch, e_density, seed, chan_index, block_indices, n_vali
 
 
 CANDIDATE_KEYS = ("block", "trial", "slot", "prob", "u_acc", "ang_ok", "dm", "electron", "recoil_dm", "vertex",
-                  "parent", "mediator", "L", "crossing")
+                  "parent", "mediator", "L", "crossing", "origin")  # origin: particle_list channels only
 
 
 def candidates(card_path, n_trials, seed=None, blocks=None, batch=8, cap=1024, parent_sampler="stock"):
@@ -260,12 +293,12 @@ def candidates(card_path, n_trials, seed=None, blocks=None, batch=8, cap=1024, p
             live = o["prob"][:k] > 0
             if not np.isfinite(o["electron"][:k][live]).all():
                 raise RuntimeError(f"block {b}: non-finite recoil electron")
-            parts.append({key: np.asarray(o[key])[:k] for key in CANDIDATE_KEYS if key != "block"}
+            parts.append({key: np.asarray(o[key])[:k] for key in CANDIDATE_KEYS if key != "block" and key in o}
                          | {"block": np.full(k, b)})
             prob_sum += float(o["prob_sum"])
             n_hits += k
             over_bar += int(pi_["over_bar"])
-    cat = {key: np.concatenate([p[key] for p in parts]) for key in CANDIDATE_KEYS}
+    cat = {key: np.concatenate([p[key] for p in parts]) for key in CANDIDATE_KEYS if parts and key in parts[0]}
     trials = sum(min(rng.BLOCK, n_trials - b * rng.BLOCK) for b in blocks)
     return {"card": str(card_path), "seed": seed, "n_trials": n_trials, "blocks": [blocks.start, blocks.stop],
             "trials": trials, "n_hits": n_hits, "prob_sum": prob_sum, "parent_over_bar": over_bar,

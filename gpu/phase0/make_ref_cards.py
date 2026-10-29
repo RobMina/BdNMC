@@ -16,6 +16,9 @@ BASES = {  # base card stem -> (samplesize, max_trials)
     # eta (added 2026-10-29; appended so the earlier cards keep their seeds): 3.2e-4 / 6.1e-3 accepted per trial
     "mb_eta_m005": (1_000_000, 5_000_000_000),
     "he_eta_cuboid_m005": (1_000_000, 1_000_000_000),
+    # particle_list (added 2026-10-29; base cards and lists from make_lists.py): 8.5e-4 / 1.3e-2 accepted per trial
+    "mb_list_m005": (1_000_000, 4_000_000_000),
+    "he_list_cuboid_m005": (1_000_000, 1_000_000_000),
 }
 MASSES_MEV = [1, 5, 20, 45]
 SEED0 = 2026102800

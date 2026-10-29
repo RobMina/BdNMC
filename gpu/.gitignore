@@ -1,5 +1,6 @@
 # Outputs, stock builds and the local Python environment are not tracked.
 phase0/out/
+phase0/lists/*.dat
 validation/out/
 stock
 .venv

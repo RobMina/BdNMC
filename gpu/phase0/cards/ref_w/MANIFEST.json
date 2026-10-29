@@ -1534,5 +1534,517 @@
   "replica": 7,
   "seed": 2026103092,
   "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/mb_list_m001_r0",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 1,
+  "replica": 0,
+  "seed": 2026103093,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m001_r1",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 1,
+  "replica": 1,
+  "seed": 2026103094,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m001_r2",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 1,
+  "replica": 2,
+  "seed": 2026103095,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m001_r3",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 1,
+  "replica": 3,
+  "seed": 2026103096,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m001_r4",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 1,
+  "replica": 4,
+  "seed": 2026103097,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m001_r5",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 1,
+  "replica": 5,
+  "seed": 2026103098,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m001_r6",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 1,
+  "replica": 6,
+  "seed": 2026103099,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m001_r7",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 1,
+  "replica": 7,
+  "seed": 2026103100,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m005_r0",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 5,
+  "replica": 0,
+  "seed": 2026103101,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m005_r1",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 5,
+  "replica": 1,
+  "seed": 2026103102,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m005_r2",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 5,
+  "replica": 2,
+  "seed": 2026103103,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m005_r3",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 5,
+  "replica": 3,
+  "seed": 2026103104,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m005_r4",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 5,
+  "replica": 4,
+  "seed": 2026103105,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m005_r5",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 5,
+  "replica": 5,
+  "seed": 2026103106,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m005_r6",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 5,
+  "replica": 6,
+  "seed": 2026103107,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m005_r7",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 5,
+  "replica": 7,
+  "seed": 2026103108,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m020_r0",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 20,
+  "replica": 0,
+  "seed": 2026103109,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m020_r1",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 20,
+  "replica": 1,
+  "seed": 2026103110,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m020_r2",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 20,
+  "replica": 2,
+  "seed": 2026103111,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m020_r3",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 20,
+  "replica": 3,
+  "seed": 2026103112,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m020_r4",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 20,
+  "replica": 4,
+  "seed": 2026103113,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m020_r5",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 20,
+  "replica": 5,
+  "seed": 2026103114,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m020_r6",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 20,
+  "replica": 6,
+  "seed": 2026103115,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m020_r7",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 20,
+  "replica": 7,
+  "seed": 2026103116,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m045_r0",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 45,
+  "replica": 0,
+  "seed": 2026103117,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m045_r1",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 45,
+  "replica": 1,
+  "seed": 2026103118,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m045_r2",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 45,
+  "replica": 2,
+  "seed": 2026103119,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m045_r3",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 45,
+  "replica": 3,
+  "seed": 2026103120,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m045_r4",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 45,
+  "replica": 4,
+  "seed": 2026103121,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m045_r5",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 45,
+  "replica": 5,
+  "seed": 2026103122,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m045_r6",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 45,
+  "replica": 6,
+  "seed": 2026103123,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_list_m045_r7",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 45,
+  "replica": 7,
+  "seed": 2026103124,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m001_r0",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 1,
+  "replica": 0,
+  "seed": 2026103125,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m001_r1",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 1,
+  "replica": 1,
+  "seed": 2026103126,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m001_r2",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 1,
+  "replica": 2,
+  "seed": 2026103127,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m001_r3",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 1,
+  "replica": 3,
+  "seed": 2026103128,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m001_r4",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 1,
+  "replica": 4,
+  "seed": 2026103129,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m001_r5",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 1,
+  "replica": 5,
+  "seed": 2026103130,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m001_r6",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 1,
+  "replica": 6,
+  "seed": 2026103131,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m001_r7",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 1,
+  "replica": 7,
+  "seed": 2026103132,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m005_r0",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 5,
+  "replica": 0,
+  "seed": 2026103133,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m005_r1",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 5,
+  "replica": 1,
+  "seed": 2026103134,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m005_r2",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 5,
+  "replica": 2,
+  "seed": 2026103135,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m005_r3",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 5,
+  "replica": 3,
+  "seed": 2026103136,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m005_r4",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 5,
+  "replica": 4,
+  "seed": 2026103137,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m005_r5",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 5,
+  "replica": 5,
+  "seed": 2026103138,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m005_r6",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 5,
+  "replica": 6,
+  "seed": 2026103139,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m005_r7",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 5,
+  "replica": 7,
+  "seed": 2026103140,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m020_r0",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 20,
+  "replica": 0,
+  "seed": 2026103141,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m020_r1",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 20,
+  "replica": 1,
+  "seed": 2026103142,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m020_r2",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 20,
+  "replica": 2,
+  "seed": 2026103143,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m020_r3",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 20,
+  "replica": 3,
+  "seed": 2026103144,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m020_r4",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 20,
+  "replica": 4,
+  "seed": 2026103145,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m020_r5",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 20,
+  "replica": 5,
+  "seed": 2026103146,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m020_r6",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 20,
+  "replica": 6,
+  "seed": 2026103147,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m020_r7",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 20,
+  "replica": 7,
+  "seed": 2026103148,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m045_r0",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 45,
+  "replica": 0,
+  "seed": 2026103149,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m045_r1",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 45,
+  "replica": 1,
+  "seed": 2026103150,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m045_r2",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 45,
+  "replica": 2,
+  "seed": 2026103151,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m045_r3",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 45,
+  "replica": 3,
+  "seed": 2026103152,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m045_r4",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 45,
+  "replica": 4,
+  "seed": 2026103153,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m045_r5",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 45,
+  "replica": 5,
+  "seed": 2026103154,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m045_r6",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 45,
+  "replica": 6,
+  "seed": 2026103155,
+  "max_trials": 5000000
+ },
+ {
+  "stem": "ref_w/he_list_cuboid_m045_r7",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 45,
+  "replica": 7,
+  "seed": 2026103156,
+  "max_trials": 5000000
  }
 ]

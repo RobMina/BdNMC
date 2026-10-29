@@ -184,5 +184,69 @@
   "seed": 2026102824,
   "samplesize": 1000000,
   "max_trials": 1000000000
+ },
+ {
+  "stem": "ref/mb_list_m001",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 1,
+  "seed": 2026102825,
+  "samplesize": 1000000,
+  "max_trials": 4000000000
+ },
+ {
+  "stem": "ref/mb_list_m005",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 5,
+  "seed": 2026102826,
+  "samplesize": 1000000,
+  "max_trials": 4000000000
+ },
+ {
+  "stem": "ref/mb_list_m020",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 20,
+  "seed": 2026102827,
+  "samplesize": 1000000,
+  "max_trials": 4000000000
+ },
+ {
+  "stem": "ref/mb_list_m045",
+  "base": "mb_list_m005",
+  "m_chi_MeV": 45,
+  "seed": 2026102828,
+  "samplesize": 1000000,
+  "max_trials": 4000000000
+ },
+ {
+  "stem": "ref/he_list_cuboid_m001",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 1,
+  "seed": 2026102829,
+  "samplesize": 1000000,
+  "max_trials": 1000000000
+ },
+ {
+  "stem": "ref/he_list_cuboid_m005",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 5,
+  "seed": 2026102830,
+  "samplesize": 1000000,
+  "max_trials": 1000000000
+ },
+ {
+  "stem": "ref/he_list_cuboid_m020",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 20,
+  "seed": 2026102831,
+  "samplesize": 1000000,
+  "max_trials": 1000000000
+ },
+ {
+  "stem": "ref/he_list_cuboid_m045",
+  "base": "he_list_cuboid_m005",
+  "m_chi_MeV": 45,
+  "seed": 2026102832,
+  "samplesize": 1000000,
+  "max_trials": 1000000000
  }
 ]

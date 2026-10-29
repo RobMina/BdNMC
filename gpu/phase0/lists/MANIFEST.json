@@ -1,0 +1,16 @@
+{
+ "mb_list": {
+  "file": "phase0/lists/mb_list.dat",
+  "base": "mb_pi0_m005",
+  "seed": 20261040,
+  "rows": 1000000,
+  "sha256": "8aff9c102efca996c6eb320acc1ec911fd989319cc2199afa5ce77d968224ac7"
+ },
+ "he_list_cuboid": {
+  "file": "phase0/lists/he_list_cuboid.dat",
+  "base": "he_pi0_cuboid_m005",
+  "seed": 20261042,
+  "rows": 1000000,
+  "sha256": "2614347061fe2d2bbfcc991a19efbe82d8434585c492ff9b58f2941813a8ccdd"
+ }
+}
