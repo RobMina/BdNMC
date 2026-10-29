@@ -33,6 +33,12 @@ class Channel:
     m_dm: float
 
 
+# Masses, the sampler bar and Vnum are traced leaves under jit (no recompile per mass, goal P2); the name and the
+# parent distribution (beam energy and target only) are static.
+jax.tree_util.register_dataclass(Channel, data_fields=["m_meson", "fmax", "vnum", "m_v", "m_dm"],
+                                 meta_fields=["name", "dist"])
+
+
 def setup(card):
     """Build the detector, signal model and channels from a card; refuse what is not ported."""
     if card.model not in ("Dark_Photon", "Dark_Photon_DM"):
@@ -112,8 +118,7 @@ def _recoil(sc, key, key_phi, dm, live, u_pos, t_in, t_out, max_rounds=10_000):
     return e4, r4, jnp.concatenate([pos, time[:, None]], axis=-1), ang_ok & live, done
 
 
-@partial(jax.jit, static_argnames=("det", "sc", "ch", "cap"))
-def block(det, sc, ch, e_density, seed, chan_index, block_index, n_valid, cap):
+def _block(det, sc, ch, e_density, seed, chan_index, block_index, n_valid, cap):
     """Pass 1 for one block. Returns per-block sums and up to `cap` candidates (fixed shape, `count` valid)."""
     n = rng.BLOCK
     key = rng.block_key(seed, chan_index, block_index)
@@ -143,49 +148,75 @@ def block(det, sc, ch, e_density, seed, chan_index, block_index, n_valid, cap):
     }
 
 
+@partial(jax.jit, static_argnames=("det", "cap"))
+def blocks_batch(det, sc, ch, e_density, seed, chan_index, block_indices, n_valid, cap):
+    """Pass 1 for a batch of blocks in one device call (leading axis = block). Each block's random numbers depend
+    only on (seed, channel, block), so the batch size does not change the results (goal P3). Compiled once per
+    detector, parent distribution, cap and batch size; `sc` and `ch` values (masses, couplings) are traced."""
+    return jax.vmap(lambda b, nv: _block(det, sc, ch, e_density, seed, chan_index, b, nv, cap))(block_indices, n_valid)
+
+
 CANDIDATE_KEYS = ("block", "trial", "slot", "prob", "u_acc", "ang_ok", "dm", "electron", "recoil_dm", "vertex",
                   "parent", "mediator", "L")
 
 
-def candidates(card_path, n_trials, seed=None, blocks=None, cap_fraction=0.25):
-    """Pass 1 over blocks `blocks` (a range; default all blocks of n_trials). Shards over disjoint block ranges
-    combine exactly into the full run, because each block's random numbers depend only on (seed, block)."""
+def candidates(card_path, n_trials, seed=None, blocks=None, batch=8, cap=1024):
+    """Pass 1 over blocks `blocks` (a range; default all blocks of n_trials), `batch` blocks per device call.
+    Shards over disjoint block ranges combine exactly into the full run, because each block's random numbers
+    depend only on (seed, block). `cap` is the starting number of candidate rows kept per block: a batch with a
+    block above it is rerun with the cap doubled (one recompile), which changes only the padding."""
     card = cardmod.parse_card(card_path)
     seed = card.seed if seed is None else seed
     det, sc, (ch,) = setup(card)
-    cap = int(2 * rng.BLOCK * cap_fraction)
     nblocks = -(-n_trials // rng.BLOCK)
     blocks = range(nblocks) if blocks is None else blocks
     if blocks.start < 0 or blocks.stop > nblocks:
         raise ValueError(f"blocks {blocks} outside 0..{nblocks}")
+    chunks = [list(blocks[i:i + batch]) for i in range(0, len(blocks), batch)]
+
+    def launch(chunk, cap):
+        # Pad a short last batch with n_valid = 0 blocks (no hits) so the batch shape, and the compile, stay fixed.
+        bi = chunk + [chunk[-1]] * (batch - len(chunk))
+        nv = [min(rng.BLOCK, n_trials - b * rng.BLOCK) for b in chunk] + [0] * (batch - len(chunk))
+        return blocks_batch(det, sc, ch, card.e_density, seed, 0, jnp.asarray(bi), jnp.asarray(nv), cap)
+
     parts, prob_sum, n_hits, over_bar = [], 0.0, 0, 0
-    for b in blocks:
-        nv = min(rng.BLOCK, n_trials - b * rng.BLOCK)
-        out = jax.device_get(block(det, sc, ch, card.e_density, seed, 0, b, nv, cap))
-        if out["count"] > cap:
-            raise RuntimeError(f"block {b}: {out['count']} candidates exceed cap {cap}; raise cap_fraction")
-        pi_ = out["parent_info"]
-        if pi_["filled"] != rng.BLOCK:
-            raise RuntimeError(f"block {b}: parent sampler ran out of rounds")
-        if pi_["over_bar"] and not isinstance(ch.dist, parents.SanfordWang):
-            raise RuntimeError(f"block {b}: {pi_['over_bar']} parent proposals above the bar")
-        if not out["recoil_done"][: out["count"]].all():
-            raise RuntimeError(f"block {b}: recoil sampler ran out of rounds")
-        # ThetaEe's acos argument can round above 1 at the recoil endpoint (stock shares this and writes NaN).
-        live = out["prob"][: out["count"]] > 0
-        if not np.isfinite(out["electron"][: out["count"]][live]).all():
-            raise RuntimeError(f"block {b}: non-finite recoil electron")
-        k = int(out["count"])
-        parts.append({key: np.asarray(out[key])[:k] for key in CANDIDATE_KEYS if key != "block"}
-                     | {"block": np.full(k, b)})
-        prob_sum += float(out["prob_sum"])
-        n_hits += k
-        over_bar += int(pi_["over_bar"])
+    pending = launch(chunks[0], cap) if chunks else None
+    for i, chunk in enumerate(chunks):
+        out, used_cap = jax.device_get(pending), cap
+        if i + 1 < len(chunks):
+            pending = launch(chunks[i + 1], cap)  # dispatched before this batch is checked (async)
+        while out["count"][: len(chunk)].max() > used_cap:
+            used_cap *= 2
+            out = jax.device_get(launch(chunk, used_cap))
+        if used_cap > cap:
+            cap = used_cap
+            if i + 1 < len(chunks):
+                pending = launch(chunks[i + 1], cap)
+        for j, b in enumerate(chunk):
+            o = jax.tree.map(lambda x: x[j], out)
+            pi_ = o["parent_info"]
+            if pi_["filled"] != rng.BLOCK:
+                raise RuntimeError(f"block {b}: parent sampler ran out of rounds")
+            if pi_["over_bar"] and not isinstance(ch.dist, parents.SanfordWang):
+                raise RuntimeError(f"block {b}: {pi_['over_bar']} parent proposals above the bar")
+            k = int(o["count"])
+            if not o["recoil_done"][:k].all():
+                raise RuntimeError(f"block {b}: recoil sampler ran out of rounds")
+            # ThetaEe's acos argument can round above 1 at the recoil endpoint (stock shares this and writes NaN).
+            live = o["prob"][:k] > 0
+            if not np.isfinite(o["electron"][:k][live]).all():
+                raise RuntimeError(f"block {b}: non-finite recoil electron")
+            parts.append({key: np.asarray(o[key])[:k] for key in CANDIDATE_KEYS if key != "block"}
+                         | {"block": np.full(k, b)})
+            prob_sum += float(o["prob_sum"])
+            n_hits += k
+            over_bar += int(pi_["over_bar"])
     cat = {key: np.concatenate([p[key] for p in parts]) for key in CANDIDATE_KEYS}
     trials = sum(min(rng.BLOCK, n_trials - b * rng.BLOCK) for b in blocks)
     return {"card": str(card_path), "seed": seed, "n_trials": n_trials, "blocks": [blocks.start, blocks.stop],
             "trials": trials, "n_hits": n_hits, "prob_sum": prob_sum, "parent_over_bar": over_bar,
-            "vnum": ch.vnum, "efficiency": card.efficiency, "candidates": cat}
+            "vnum": ch.vnum, "efficiency": card.efficiency, "batch": batch, "cap": cap, "candidates": cat}
 
 
 def merge(shards):
@@ -219,6 +250,7 @@ def finish(res, weighted=False):
                   "accepted": int(accepted.sum()), "accepted_mask": accepted}
 
 
-def run(card_path, n_trials, seed=None, cap_fraction=0.25, weighted=False):
-    """Run n_trials trials of the card's single channel (pass 1 and pass 2 in one process)."""
-    return finish(candidates(card_path, n_trials, seed, cap_fraction=cap_fraction), weighted)
+def run(card_path, n_trials, seed=None, weighted=False, **kw):
+    """Run n_trials trials of the card's single channel (pass 1 and pass 2 in one process); `kw` go to
+    `candidates` (batch, cap)."""
+    return finish(candidates(card_path, n_trials, seed, **kw), weighted)

@@ -5,9 +5,10 @@ Elementwise in jax.numpy; expressions keep the stock operation order so float64 
 `min_scatter_energy`/`max_scatter_energy` as total energies: BdNMCSession calls `set_energy_limits`, which
 overwrites the `+Me` the Electron_Scatter constructor adds.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 import math
 
+import jax
 import jax.numpy as jnp
 
 from .constants import MASS_ELECTRON as Me, alphaEM, convGeV2cm2, convmcm, pi
@@ -25,6 +26,11 @@ class ElectronScatter:
     e_max: float
     min_angle: float = 0.0
     max_angle: float = 2.1 * pi
+
+
+# Every field is a traced leaf under jit, so a new mass or coupling does not recompile (goal P2).
+jax.tree_util.register_dataclass(ElectronScatter, data_fields=[f.name for f in fields(ElectronScatter)],
+                                 meta_fields=[])
 
 
 def ee_theta(E, cos_t, m):

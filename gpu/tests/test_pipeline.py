@@ -49,6 +49,24 @@ def test_truncated_run_is_a_prefix(mb_pi0):
     np.testing.assert_array_equal(half["candidates"]["prob"], full["prob"][keep])
 
 
+def test_new_mass_does_not_recompile():
+    # Masses and couplings are traced (goal P2): the four ref masses of one card share one compiled block.
+    pipeline.blocks_batch.clear_cache()
+    for mev in (1, 5, 20, 45):
+        pipeline.candidates(CARDS / "ref" / f"mb_pi0_m{mev:03d}.dat", 1000, seed=3)
+    assert pipeline.blocks_batch._cache_size() == 1
+
+
+def test_batch_and_cap_do_not_change_results():
+    # P3: blocks per device call, the starting cap and its doubling change only scheduling and padding.
+    card, n = CARDS / "ref" / "he_pi0_cuboid_m005.dat", 5 * rng.BLOCK - 123
+    a = pipeline.candidates(card, n, seed=11, batch=1, cap=64)["candidates"]
+    b = pipeline.candidates(card, n, seed=11, batch=3, cap=8192)["candidates"]
+    assert len(a["prob"]) > 64
+    for k in pipeline.CANDIDATE_KEYS:
+        np.testing.assert_array_equal(a[k], b[k], err_msg=k)
+
+
 def test_electron_inside_kinematic_window(mb_pi0):
     c = mb_pi0["candidates"]
     Ee = c["electron"][:, 0]
