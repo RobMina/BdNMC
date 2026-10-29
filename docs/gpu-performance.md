@@ -7,12 +7,16 @@ must pass, is in [gpu-validation.md](gpu-validation.md).
 **Target (P1):** at least 100x one core of stock `-O2`, in accepted events per second, on each of the four 5 MeV
 generic cards. Measured on a full A100 in float64, with binary output included and compile time reported
 separately.
-**Status (2026-10-29):** met on the two pi0 cards with HDF5 output included, for both validated parent samplers:
+**Status (2026-10-29):** met on three of the four cards. On the two pi0 cards with HDF5 output included, for both
+validated parent samplers:
 - stock sampler: 126x on `mb_pi0`, 109x on `he_pi0`;
 - envelope sampler: 188x on `mb_pi0`, 500x on `he_pi0`.
 
-Not yet the full P1: the brem cards are ported and validated but not yet benchmarked on the GPU, the stock
-baseline is a laptop core rather than a core of the GPU node, and the MIG and whole-node figures are not measured.
+On the brem cards (stock sampler, the only one ported for brem): met on `he_brem_cuboid` (140x), **not met on
+`mb_brem` (43x)**, where writing the HDF5 file takes 58 % of the run ([below](#proton-brem-with-hdf5-output-commit-2c9e3c7)).
+
+Also not yet done for P1: the stock baseline is a laptop core rather than a core of the GPU node, and the MIG and
+whole-node figures are not measured.
 
 ## Stock BdNMC (L1, one core)
 
@@ -90,12 +94,25 @@ row per DM, about 260 bytes), the write timed and included; 1.34e8 trials per po
 The envelope configuration has since passed V1 and V2 (pre-declared repeat, [gpu-validation.md](gpu-validation.md#the-envelope-sampler)).
 The P1 figures are the ones with output in the table above.
 
-### Proton brem, commit `9127b57` (first figures, not a benchmark)
+### Proton brem with HDF5 output, commit `2c9e3c7`
 
-- **L1, one core:** `he_brem_cuboid` runs at 0.32 M trials/s, 27.3 k accepted/s without output: 3.1x one core of
-  stock `-O2`.
-- **G1:** only the V1/V2 run so far, at about 25 s wall per 5e6-trial shard including compilation (one process
-  per shard). `bench.py` with HDF5 output on the brem cards is still to run.
+G1, stock sampler, `bench.py --write hdf5 --cap 16384` (a brem block has about 9,400-10,500 candidates), 6.7e7
+trials per card:
+
+| Card | Batch | Trials/s | Accepted/s | Generate / HDF5 write | Device only, trials/s | vs stock `-O2` / `-O0` |
+|---|---|---|---|---|---|---|
+| `mb_brem` | 64 / 256 | 17.9 / 19.8 M | 1,580 / **1,749 k** | 1.41 s / 1.98 s, 1.57 GB | 208 / 229 M | **43x** / 135x |
+| `he_brem_cuboid` | 64 / 256 | 13.7 / 14.5 M | 1,155 / **1,220 k** | 2.59 s / 2.04 s, 1.49 GB | 48 / 54 M | **140x** / 968x |
+
+- **First calls:** 4.4-8.4 s, excluded.
+- **`mb_brem` misses P1** (100x is 4.05 M accepted/s). Stock accepts 8.9 % of `mb_brem` trials, so the file is large
+  (5.9 M rows, 265 bytes each), and writing it to the cluster's shared scratch file system at about 0.8 GB/s takes
+  58 % of the run. Generation alone runs at 4.2 M accepted/s (104x). The host side between device and file
+  (transfer, checks) is the next cost: device only is 229 M trials/s against 47.5 M for generation end to end.
+- **Ways to close it, none tried yet:** write to node-local disk; overlap the write with generation; drop columns
+  that can be recomputed (`recoil_dm` is the DM minus the electron).
+- **L1, one core** (commit `9127b57`, no output): `he_brem_cuboid` at 0.32 M trials/s, 27.3 k accepted/s, 3.1x one
+  core of stock `-O2`.
 
 ## Where the time goes
 
@@ -113,9 +130,10 @@ The P1 figures are the ones with output in the table above.
 At small batches the two timings come from separately compiled programs, so a share near or above 100 % means
 "almost all".
 
-Proton brem (stock sampler, L1, batch 1): the parent sampler is 93-97 % of the block, with 8 proposals per
-accepted V on `mb_brem` and 97 on `he_brem_cuboid`, whose density peaks sharply inside a wide (z, pT) window. An
-envelope for brem would cut this as it did for pi0.
+Proton brem (stock sampler): the parent sampler is 93-97 % of the block on L1 (batch 1), with 8 proposals per
+accepted V on `mb_brem` and 97 on `he_brem_cuboid`, whose density peaks sharply inside a wide (z, pT) window. On
+G1 at batch 256 it is 80 % (`mb_brem`, 438 M trials/s per block) and 96 % (`he_brem`, 63 M trials/s). An envelope
+for brem would cut the `he_brem` cost as it did for pi0; on `mb_brem` the output, not the sampler, is the limit.
 
 With the stock samplers the parent rejection loop is the whole cost. With the envelope it falls to about half on
 the GPU at large batches, and the host side (transfer of candidates, checks, concatenation) becomes the next cost:
@@ -126,7 +144,6 @@ end-to-end), against 17-23 % with the stock sampler at batch 64.
 
 - A stock baseline on a core of the GPU node itself, and the whole-node comparison.
 - A MIG slice.
-- The brem cards on the GPU (`bench.py`, with HDF5 output).
 - P2 (a 20-mass x all-channel grid in one GPU-hour): masses are already runtime inputs, so a mass scan reuses the
   compiled kernel, but the grid itself has not been run.
 

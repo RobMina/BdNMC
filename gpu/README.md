@@ -13,7 +13,8 @@ generic, experiment-independent parameter cards.
 - **Throughput** with HDF5 output, in accepted events per second against one core of stock `-O2`:
   - stock parent sampler: 126x (Sanford-Wang card), 109x (BMPT card);
   - envelope sampler: 188x and 500x.
-  - The brem cards are not benchmarked on the GPU yet.
+  - brem (stock sampler): 140x on the 120 GeV card; 43x on the 8.9 GeV card, where writing the HDF5 file is 58 %
+    of the run.
 - **Not yet ported:** eta and other channels, models and signals; the envelope sampler for brem.
 
 | Page | Content |
