@@ -17,7 +17,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from . import branching, card as cardmod, decay, detector, electron, parents, rng
+from . import branching, brem, card as cardmod, decay, detector, electron, parents, rng
 from .constants import MASS_ELECTRON as Me, MASS_PION_NEUTRAL, MASS_ETA, pi, speed_of_light
 from .kinematics import momentum, phi, rotate_y, rotate_z, theta
 
@@ -31,12 +31,13 @@ class Channel:
     vnum: float
     m_v: float
     m_dm: float
+    kind: str = "meson"  # "meson": meson -> gamma V(-> chi chi); "brem": proton bremsstrahlung V -> chi chi
 
 
-# Masses, the sampler bar and Vnum are traced leaves under jit (no recompile per mass, goal P2); the name and the
-# parent distribution (beam energy and target only) are static.
+# Masses, the sampler bar and Vnum are traced leaves under jit (no recompile per mass, goal P2); the name, the
+# parent distribution (beam, target and the brem window only) and the kind are static.
 jax.tree_util.register_dataclass(Channel, data_fields=["m_meson", "fmax", "vnum", "m_v", "m_dm"],
-                                 meta_fields=["name", "dist"])
+                                 meta_fields=["name", "dist", "kind"])
 
 
 @lru_cache(maxsize=None)
@@ -64,8 +65,13 @@ def setup(card, parent_sampler="stock"):
                                   card.min_scatter_angle, card.max_scatter_angle)
     chans = []
     for ch in card.channels:
-        if ch.production_channel != "pi0_decay" or ch.dist_mods:
-            raise NotImplementedError(f"channel {ch.production_channel} / dist_mods {ch.dist_mods}")
+        if ch.dist_mods:
+            raise NotImplementedError(f"dist_mods {ch.dist_mods}")
+        if ch.production_channel in ("V_decay", "Brem_V") and ch.production_distribution == "proton_brem":
+            chans.append(_brem_channel(card, ch, parent_sampler))
+            continue
+        if ch.production_channel != "pi0_decay":
+            raise NotImplementedError(f"channel {ch.production_channel} with {ch.production_distribution}")
         br, off = branching.pi0_channel(card.mass_v, card.mass_dm, card.epsilon, card.alpha_d)
         if not branching.uses_on_shell_decay(off, card.mass_v, card.mass_dm, MASS_PION_NEUTRAL):
             raise NotImplementedError("off-shell pi0 decay")
@@ -89,6 +95,19 @@ def setup(card, parent_sampler="stock"):
     if len(chans) != 1:
         raise NotImplementedError("exactly one production channel for now")
     return det, sc, chans
+
+
+def _brem_channel(card, ch, parent_sampler):
+    """V_decay with production_distribution proton_brem (Kinetic_Mixing.cpp:186-198): Vnum = V_prod_rate x POT."""
+    if parent_sampler != "stock":
+        raise NotImplementedError("the envelope sampler is not ported for proton_brem")
+    if 2 * card.mass_dm >= card.mass_v:
+        raise NotImplementedError("V -> chi chi is closed (2 m_chi >= m_V)")
+    dist = brem.ProtonBrem(card.beam_energy, ch.zmin, ch.zmax, ch.ptmin, ch.ptmax)
+    dist.check()
+    vnum = dist.v_prod_rate(card.epsilon, card.mass_v) * card.pot
+    return Channel("Dark_Bremsstrahlung", card.mass_v, dist, float(dist.find_fmax(card.mass_v)), vnum,
+                   card.mass_v, card.mass_dm, kind="brem")
 
 
 def _recoil(sc, key, key_phi, dm, live, u_pos, t_in, t_out, max_rounds=10_000):
@@ -135,13 +154,23 @@ def _block(det, sc, ch, e_density, seed, chan_index, block_index, n_valid, cap):
     """Pass 1 for one block. Returns per-block sums and up to `cap` candidates (fixed shape, `count` valid)."""
     n = rng.BLOCK
     key = rng.block_key(seed, chan_index, block_index)
-    par, pinfo = parents.sample_block(ch.dist, key, n, ch.fmax, ch.m_meson)
-    u = rng.uniform(key, rng.DECAY, (n, 4))
-    med, d1, d2 = decay.decay_dm(par, ch.m_meson, ch.m_v, ch.m_dm, u[:, 0], u[:, 1], u[:, 2], u[:, 3])
+    if ch.kind == "brem":
+        med, pinfo = brem.sample_block(ch.dist, key, n, ch.fmax, ch.m_v)
+        par = med  # no meson: the V is the parent of the event
+        u = rng.uniform(key, rng.DECAY, (n, 2))
+        d1, d2 = decay.two_body(med, ch.m_v, ch.m_dm, ch.m_dm, u[:, 0], u[:, 1])
+    else:
+        par, pinfo = parents.sample_block(ch.dist, key, n, ch.fmax, ch.m_meson)
+        u = rng.uniform(key, rng.DECAY, (n, 4))
+        med, d1, d2 = decay.decay_dm(par, ch.m_meson, ch.m_v, ch.m_dm, u[:, 0], u[:, 1], u[:, 2], u[:, 3])
     valid = jnp.arange(n) < n_valid
     dm = jnp.concatenate([d1, d2])  # candidate slot = dm index * n + trial index
     L, t_in, t_out = detector.ldet(det, jnp.zeros((2 * n, 3)), dm[:, 1:])
     hit = (L > 0) & jnp.concatenate([valid, valid])
+    if ch.kind == "brem":
+        # V_decay_gen::GenDM tests `det_int(dm1) > 0 || det_int(dm2) > 0`: the second DM is kept only when the
+        # first misses, so a brem event never has two DM.
+        hit = hit & jnp.concatenate([jnp.ones(n, bool), ~(L[:n] > 0)])
     prob = jnp.where(hit, electron.scatter_probability(sc, dm[:, 0], L, e_density), 0.0)
     idx = jnp.nonzero(hit, size=cap, fill_value=2 * n)[0]
     count = jnp.sum(hit)

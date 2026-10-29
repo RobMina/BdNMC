@@ -15,7 +15,7 @@ import jax.numpy as jnp
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from bdnmc_jax import card as cardmod, parents, pipeline, rng  # noqa: E402
+from bdnmc_jax import brem, card as cardmod, parents, pipeline, rng  # noqa: E402
 
 
 def timed(f, n_calls):
@@ -66,10 +66,15 @@ def main():
     out = {"card": str(args.card), "backend": jax.default_backend(), "device": jax.devices()[0].device_kind,
            "dist": type(ch.dist).__name__, "parent_sampler": args.parent_sampler, "runs": []}
 
+    def one_block(b):
+        key = rng.block_key(card.seed, 0, b)
+        if ch.kind == "brem":
+            return brem.sample_block(ch.dist, key, n, ch.fmax, ch.m_v)
+        return parents.sample_block(ch.dist, key, n, ch.fmax, ch.m_meson)
+
     @jax.jit
     def parents_only(bi):
-        return jax.vmap(lambda b: parents.sample_block(ch.dist, rng.block_key(card.seed, 0, b), n, ch.fmax,
-                                                       ch.m_meson))(bi)
+        return jax.vmap(one_block)(bi)
 
     for b in args.batch:
         bi = lambda i: jnp.arange(i * b, (i + 1) * b)  # noqa: E731

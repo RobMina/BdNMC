@@ -34,7 +34,10 @@ import numpy as np
 from . import card as cardmod, rng
 from .constants import MASS_ELECTRON, MASS_PION_NEUTRAL
 
-PARENT = {"pi0_decay": ("pion", MASS_PION_NEUTRAL)}  # parent name and mass as stock writes them, per channel
+# Parent line per production channel as stock writes it (name, mass); None: no parent line (proton brem events
+# start with the V). Channel name in the summary file: DMGenerator::Channel_Name.
+PARENT = {"pi0_decay": ("pion", MASS_PION_NEUTRAL), "V_decay": None, "Brem_V": None}
+CHANNEL_NAME = {"V_decay": "Dark_Bremsstrahlung", "Brem_V": "Dark_Bremsstrahlung"}
 FORMAT = "bdnmc-jax-events/1"
 
 
@@ -76,7 +79,8 @@ def write_text(res, path, summary_path=None, run=None):
     card = cardmod.parse_card(res["card"])
     run = run or card.keymap.get("run") or str(int(time.time()))
     chan = card.channels[0]
-    parent_name, parent_mass = PARENT[chan.production_channel]
+    parent = PARENT[chan.production_channel]
+    chan_name = CHANNEL_NAME.get(chan.production_channel, chan.production_channel)
     c = res["candidates"]
     rows, event = accepted_events(res)
     zero4 = (0.0, 0.0, 0.0, 0.0)
@@ -91,8 +95,10 @@ def write_text(res, path, summary_path=None, run=None):
             r0 = rows[i]
             # weighted: stock prints the event's scatter probability (pMax, reset per DM) after the event number
             head = f"event {event[i]}" + (f" {_g10(c['prob'][r0])}" if res.get("weighted") else "")
-            lines = [head + "\n", _particle(parent_name, c["parent"][r0], parent_mass, zero4, zero4),
-                     _particle("V", c["mediator"][r0], card.mass_v, zero4, zero4)]
+            lines = [head + "\n"]
+            if parent is not None:
+                lines.append(_particle(parent[0], c["parent"][r0], parent[1], zero4, zero4))
+            lines.append(_particle("V", c["mediator"][r0], card.mass_v, zero4, zero4))
             for r in rows[i:j]:
                 v = tuple(c["vertex"][r])
                 lines.append(_particle("DM", c["dm"][r], card.mass_dm, zero4, v, tuple(c["crossing"][r])))
@@ -107,7 +113,7 @@ def write_text(res, path, summary_path=None, run=None):
         rep = _model_report(card, "%g")
         with open(summary_path, "a") as f:
             f.write(f"Run {run}\n")
-            f.write(f"{chan.production_channel} {rep} {res['se']:g} {card.signal_channel} {card.pot:g} "
+            f.write(f"{chan_name} {rep} {res['se']:g} {card.signal_channel} {card.pot:g} "
                     f"{card.efficiency:g} {n_events} {res['vnum']:g} {res['vnum']:g}\n")
             f.write(f"Total {rep} {res['se']:g} {card.signal_channel} {card.pot:g} {card.efficiency:g} {n_events} \n")
     return n_events

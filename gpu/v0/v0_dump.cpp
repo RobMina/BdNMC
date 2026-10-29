@@ -8,10 +8,12 @@
 #include "sanfordwang.h"
 #include "BMPT_dist.h"
 #include "Particle.h"
+#include "Proton_Brem_Distribution.h"
 #include "constants.h"
 
 #include <cmath>
 #include <cstdio>
+#include <string>
 
 static void ray(int k, double scale, double &px, double &py, double &pz) {
     px = scale * 0.01 * std::sin(1.7 * k);
@@ -66,5 +68,27 @@ int main() {
             std::printf("bmpt_ics %.17g %.17g %.17g\n", pb, tb, bmpt.Invariant_Cross_Section(pb, tb));
         }
     }
+    // Proton bremsstrahlung: the splitting function, d2N (called with pT in its pT^2 slot, as stock's sampler and
+    // rate integral call it) and V_prod_rate for the two generic brem windows. The constructor prints its mode.
+    for (int i = 0; i <= 20; i++)
+        for (int j = 0; j <= 20; j++)
+            for (double mA : {0.02, 0.1, 0.5}) {
+                double z = 0.05 + 0.9 * i / 20.0, pt2 = 1.5 * j / 20.0;
+                std::printf("wpp %.17g %.17g %.17g %.17g\n", z, pt2, mA, wpp(z, pt2, mA));
+            }
+    struct Window { double E, zmin, zmax, ptmax; };
+    for (Window w : {Window{8.9, 0.3, 0.7, 0.2}, Window{120.0, 0.1, 0.9, 1.0}})
+        for (double mA : {0.02, 0.1, 0.3}) {
+            std::string mode = "proton_brem";
+            Proton_Brem_Distribution pbd(w.E, kap, mA, w.ptmax, w.zmax, w.zmin, alD, mode, 0.0);
+            std::printf("V_prod_rate %.17g %.17g %.17g %.17g %.17g %.17g\n", w.E, w.zmin, w.zmax, w.ptmax, mA,
+                        pbd.V_prod_rate());
+            for (int i = 0; i <= 10; i++)
+                for (int j = 0; j <= 10; j++) {
+                    double z = w.zmin + (w.zmax - w.zmin) * i / 10.0, pt = w.ptmax * j / 10.0;
+                    std::printf("d2N %.17g %.17g %.17g %.17g %.17g\n", w.E, mA, z, pt,
+                                pbd.d2N_proton_brem_to_V(z, pt));
+                }
+        }
     return 0;
 }

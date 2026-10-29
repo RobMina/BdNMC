@@ -26,8 +26,9 @@ def uniform(key, stage, shape):
 
 
 @partial(jax.jit, static_argnames=("propose", "n", "pool", "max_rounds"))
-def rejection(key, propose, fmax, n, pool, max_rounds=10_000):
-    """Draw n accepted samples, in proposal order, from `propose(key, pool) -> (x (pool, d), f (pool,))`.
+def rejection(key, propose, fmax, n, pool, max_rounds=10_000, params=None):
+    """Draw n accepted samples, in proposal order, from `propose(key, pool) -> (x (pool, d), f (pool,))`, or
+    `propose(key, pool, params)` when `params` (traced, e.g. a mass) is given.
 
     A proposal is accepted when f > u * fmax (stock's test). Rounds of `pool` proposals repeat, each with its own
     key, until n are accepted. Returns (x (n, d), filled, n_proposed, n_over) where n_over counts proposals with
@@ -42,7 +43,7 @@ def rejection(key, propose, fmax, n, pool, max_rounds=10_000):
     def body(state):
         out, filled, nprop, nover, r = state
         kr = jax.random.fold_in(key, r)
-        x, f = propose(jax.random.fold_in(kr, 0), pool)
+        x, f = propose(jax.random.fold_in(kr, 0), pool, *(() if params is None else (params,)))
         u = jax.random.uniform(jax.random.fold_in(kr, 1), (pool,), dtype=jnp.float64)
         acc = f > u * fmax
         idx = jnp.where(acc, filled + jnp.cumsum(acc) - 1, n)
@@ -50,7 +51,7 @@ def rejection(key, propose, fmax, n, pool, max_rounds=10_000):
         filled = jnp.minimum(filled + jnp.sum(acc), n)
         return out, filled, nprop + pool, nover + jnp.sum(f > fmax), r + 1
 
-    x0, _ = jax.eval_shape(lambda k: propose(k, pool), key)
+    x0, _ = jax.eval_shape(lambda k: propose(k, pool, *(() if params is None else (params,))), key)
     out = jnp.zeros((n,) + x0.shape[1:], dtype=x0.dtype)
     zero = jnp.zeros((), dtype=jnp.int64)
     out, filled, nprop, nover, _ = jax.lax.while_loop(cond, body, (out, zero, zero, zero, zero))

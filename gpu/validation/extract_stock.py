@@ -2,7 +2,8 @@
 
 Stock writes, per accepted DM, the lines `DM`, `Recoil_DM`, `electron` (probscatter inserts the electron and then
 the recoil right after the DM, so the electron's DM is the last `DM` line before it); the parent is the event's
-`pion` line. Particle line: name E px py pz m x0 y0 z0 t0 x1 y1 z1 t1 KE p*c0 p*c1 (Particle::report).
+`pion` line, or its `V` line when there is no meson (proton bremsstrahlung). Particle line: name E px py pz m x0 y0
+z0 t0 x1 y1 z1 t1 KE p*c0 p*c1 (Particle::report).
 Usage: extract_stock.py <events.dat> <out.npz>
 """
 import argparse
@@ -22,7 +23,7 @@ def extract(path):
                 continue
             tok = line.split()
             name = tok[0]
-            if name == "pion":
+            if name == "pion" or (name == "V" and last_pion is None):
                 last_pion = [float(x) for x in tok[1:5]]
             elif name == "DM":
                 last_dm = [float(x) for x in tok[1:5]]

@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 import bdnmc_jax  # noqa: F401
-from bdnmc_jax import branching, detector, electron, parents
+from bdnmc_jax import branching, brem, detector, electron, parents
 from bdnmc_jax.constants import MASS_ELECTRON as Me
 
 DUMP = Path(__file__).resolve().parents[1] / "v0" / "v0_dump.txt"
@@ -104,6 +104,40 @@ def test_branching_ratios(dump):
         assert branching.brpi0toVgamma(MV, mx, KAP, ALD) == pytest.approx(br, rel=REL)
     for mx, br in dump["brV_to_dm_dm"]:
         assert branching.brV_to_dm_dm(MV, mx, KAP, ALD) == pytest.approx(br, rel=REL)
+
+
+def _cond_sum(*terms):
+    """Condition number of a sum: sum of |terms| / |sum|."""
+    terms = [np.asarray(t, float) for t in terms]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return np.nan_to_num(sum(np.abs(t) for t in terms) / np.abs(sum(terms)), nan=1e16, posinf=1e16)
+
+
+def _wpp_cond(z, pt2, mA):
+    mp = 0.938272
+    H = pt2 + (1 - z) * mA * mA + (z * mp) ** 2
+    return 50 + _cond_sum((1 + (1 - z) ** 2) / z, -2 * z * (1 - z) * (2 * mp * mp + mA * mA) / H,
+                          4 * z * (1 - z) * (z * mp * mp / H) ** 2, 2 * z * (1 - z) * (z + (1 - z) ** 2) * (mp * mA / H) ** 2,
+                          2 * z * ((1 - z) * mA * mA / H) ** 2)
+
+
+def test_proton_brem(dump):
+    if "wpp" not in dump:
+        pytest.skip("v0_dump.txt predates the proton-brem entries (rebuild the harness)")
+    w = dump["wpp"]
+    close(brem.wpp(w[:, 0], w[:, 1], w[:, 2]), w[:, 3], _wpp_cond(w[:, 0], w[:, 1], w[:, 2]))
+    d = dump["d2N"]
+    E, mA, z, pt = d[:, 0], d[:, 1], d[:, 2], d[:, 3]
+    mp = 0.938272
+    EV = np.sqrt(mA * mA + pt + z * z * (E * E - mp * mp))
+    # sigma_pp(s') with s' = 2 mp (E - E_V): the difference cancels as z -> 1; log^2 and the powers add a few units.
+    cond = _wpp_cond(z, pt, mA) + 50 * (1 + E / np.abs(E - EV))
+    got = np.array([float(brem.d2N(zi, pi, Ei, KAP, mi)) for Ei, mi, zi, pi in zip(E, mA, z, pt)])
+    close(got, d[:, 4], cond)
+    for E_, zmin, zmax, ptmax, mA_, rate in dump["V_prod_rate"]:
+        r = brem.ProtonBrem(E_, zmin, zmax, 0.0, ptmax).v_prod_rate(KAP, mA_)
+        # 40,401 positive terms summed in a different order (numpy pairwise against stock's loops)
+        assert r == pytest.approx(rate, rel=1e-10)
 
 
 def test_parent_densities(dump):

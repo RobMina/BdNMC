@@ -4,7 +4,9 @@ and binning frozen in v_config.json (its sha256 goes into the result).
 Inputs per point <stem>: port shards validation/out/v/<stem>/shard*.npz; stock electrons
 validation/out/stock/<stem>.npz (extract_stock.py); stock unweighted log phase0/out/ref/<stem>/O2/log.txt; stock
 weighted replica logs phase0/out/ref_w/<stem>_r*/O2/log.txt.
-Usage: compare_v.py [--port-dir dir] [--json out.json]  (port shards in <port-dir>/<stem>/, default validation/out/v)
+Usage: compare_v.py [--config v_config.json] [--port-dir dir] [--json out.json]  (port shards in <port-dir>/<stem>/,
+default validation/out/v). A config's "unweighted_dirs" maps a point to its stock unweighted run directory when that
+is not phase0/out/ref/<stem>/O2.
 """
 import argparse
 import hashlib
@@ -29,8 +31,8 @@ ACC = re.compile(r" Events: (\S+) V_num: ", re.M)
 
 # --- V1 ------------------------------------------------------------------------------------------------------------
 
-def stock_unweighted(stem):
-    text = (ROOT / "phase0" / "out" / "ref" / stem / "O2" / "log.txt").read_text()
+def stock_unweighted(stem, run_dir=None):
+    text = (ROOT / (run_dir or f"phase0/out/ref/{stem}/O2") / "log.txt").read_text()
     se = float(SE.search(text).group(1))
     return se, se / math.sqrt(sum(float(x) for x in ACC.findall(text)))
 
@@ -111,13 +113,14 @@ def port_v2_sample(res):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--config", type=Path, default=CONFIG)
     ap.add_argument("--port-dir", type=Path, default=ROOT / "validation" / "out" / "v")
     ap.add_argument("--json", type=Path, default=ROOT / "validation" / "out" / "v_result.json")
     args = ap.parse_args()
-    cfg = json.loads(CONFIG.read_text())
+    cfg = json.loads(args.config.read_text())
     v1c, v2c = cfg["V1"], cfg["V2"]
-    out = {"config_sha256": hashlib.sha256(CONFIG.read_bytes()).hexdigest(), "port_dir": str(args.port_dir),
-           "points": {}}
+    out = {"config": args.config.name, "config_sha256": hashlib.sha256(args.config.read_bytes()).hexdigest(),
+           "port_dir": str(args.port_dir), "points": {}}
     pulls, pvals, tails, fails = [], [], [], []
     for stem in cfg["points"]:
         res = pipeline.merge(shards.load_all((args.port_dir / stem).glob("shard*.npz")))
@@ -126,7 +129,7 @@ def main():
         p1 = port_v1(res) | {"backend": res.get("backend", "cpu"), "device": res.get("device"),
                              "wall_s": res.get("wall_s")}
         sw, sw_sig, nrep = stock_weighted(stem)
-        su, su_sig = stock_unweighted(stem)
+        su, su_sig = stock_unweighted(stem, cfg.get("unweighted_dirs", {}).get(stem))
         pull = (p1["se_weighted"] - sw) / math.hypot(p1["sigma_weighted"], sw_sig)
         pulls.append(pull)
         point = {"port": p1, "stock_weighted": [sw, sw_sig, nrep], "stock_unweighted": [su, su_sig],
