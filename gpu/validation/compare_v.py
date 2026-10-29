@@ -4,9 +4,11 @@ and binning frozen in v_config.json (its sha256 goes into the result).
 Inputs per point <stem>: port shards validation/out/v/<stem>/shard*.npz; stock electrons
 validation/out/stock/<stem>.npz (extract_stock.py); stock unweighted log phase0/out/ref/<stem>/O2/log.txt; stock
 weighted replica logs phase0/out/ref_w/<stem>_r*/O2/log.txt.
-Usage: compare_v.py [--config v_config.json] [--port-dir dir] [--json out.json]  (port shards in <port-dir>/<stem>/,
-default validation/out/v). A config's "unweighted_dirs" maps a point to its stock unweighted run directory when that
-is not phase0/out/ref/<stem>/O2.
+Usage: compare_v.py [--config v_config.json] [--port-dir dir] [--json out.json] [--stock-dir dir] [--points stem ...]
+(port shards in <port-dir>/<stem>/, default validation/out/v). A config's "unweighted_dirs" maps a point to its stock
+unweighted run directory when that is not phase0/out/ref/<stem>/O2. --stock-dir takes the stock electrons from
+another directory (a repeat reference) and --points runs a subset; V1 and the overall verdicts then cover only those
+points, so such a result is not a V1/V2 verdict of the config.
 """
 import argparse
 import hashlib
@@ -116,13 +118,20 @@ def main():
     ap.add_argument("--config", type=Path, default=CONFIG)
     ap.add_argument("--port-dir", type=Path, default=ROOT / "validation" / "out" / "v")
     ap.add_argument("--json", type=Path, default=ROOT / "validation" / "out" / "v_result.json")
+    ap.add_argument("--stock-dir", type=Path, default=ROOT / "validation" / "out" / "stock")
+    ap.add_argument("--points", nargs="+")
     args = ap.parse_args()
     cfg = json.loads(args.config.read_text())
     v1c, v2c = cfg["V1"], cfg["V2"]
+    points = args.points or cfg["points"]
+    if not set(points) <= set(cfg["points"]):
+        raise ValueError(f"points not in {args.config.name}: {sorted(set(points) - set(cfg['points']))}")
     out = {"config": args.config.name, "config_sha256": hashlib.sha256(args.config.read_bytes()).hexdigest(),
-           "port_dir": str(args.port_dir), "points": {}}
+           "port_dir": str(args.port_dir), "stock_dir": str(args.stock_dir), "points": {}}
+    if args.points:
+        out["subset"] = points
     pulls, pvals, tails, fails = [], [], [], []
-    for stem in cfg["points"]:
+    for stem in points:
         res = pipeline.merge(shards.load_all((args.port_dir / stem).glob("shard*.npz")))
         if res["trials"] != res["n_trials"]:
             raise ValueError(f"{stem}: shards cover {res['trials']} of {res['n_trials']} trials")
@@ -138,7 +147,7 @@ def main():
                  "secondary_ok": abs(p1["se_weighted"] - su) <= max(0.01 * su, 2 * math.hypot(p1["sigma_weighted"], su_sig)),
                  "port_unweighted_vs_stock_weighted_pull":
                      (p1["se_unweighted"] - sw) / math.hypot(p1["sigma_unweighted"], sw_sig)}
-        xs_all = np.load(ROOT / "validation" / "out" / "stock" / f"{stem}.npz")
+        xs_all = np.load(args.stock_dir / f"{stem}.npz")
         vs = variables(xs_all["electron"], xs_all["dm"], xs_all["parent"], xs_all["vertex"])
         vp, w = port_v2_sample(res)
         hist = {}

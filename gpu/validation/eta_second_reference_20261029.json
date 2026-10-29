@@ -1,0 +1,31 @@
+{
+ "_comment": "Pre-declared before running: a second stock reference at two eta points, to tell whether the offsets seen in every eta port run come from the shared stock reference or from the port. Committed before the stock runs start; read only by the rule below. It does not change the outcome of v_rerun_envelope_eta_20261029.json (envelope not validated for eta).",
+ "declared": "2026-10-29",
+ "observation": {
+  "runs": {"22160737": "stock sampler, seed offset 0", "22160738": "envelope, seed offset 0",
+           "22166444": "envelope, seed offset 1e6", "22166445": "stock sampler, seed offset 1e6 (control; V2 fails: tail pull -3.09 > 3)"},
+  "he_eta_cuboid_m005 theta_e tail pull": [-2.91, -2.32, -2.18, -3.09],
+  "mb_eta_m005 theta_e|E_e_q0 p": [0.038, 0.0087, 0.0053, 0.044],
+  "note": "the four port runs are independent; the stock reference sample is the same in all four"
+ },
+ "second_reference": {
+  "cards": "phase0/cards/ref_r2/{mb_eta_m005,he_eta_cuboid_m005}.dat (make_ref_repeat_cards.py): ref cards with seed + 1000000, same samplesize and max_trials",
+  "build": "stock -O2, as the first reference",
+  "electrons": "validation/out/stock_r2/<stem>.npz (extract_stock.py)"
+ },
+ "tests": {
+  "A_first_vs_second_reference": "compare_stock_refs.py --config validation/v_config_eta.json: the 14 V2 histograms and 2 tail checks per point, binned and cut on the first reference, the second in the port's place",
+  "B_ports_vs_second_reference": "compare_v.py --config validation/v_config_eta.json --stock-dir validation/out/stock_r2 --points mb_eta_m005 he_eta_cuboid_m005, for each of the four port runs' shards"
+ },
+ "decision_rule": {
+  "reference": "A shows the offset (he_eta_cuboid_m005 theta_e tail pull <= -2, i.e. the first reference has more tail than the second, or mb_eta_m005 theta_e|E_e_q0 p < 0.05) AND in B the mean of the four he_eta_cuboid_m005 theta_e tail pulls is within +-1.5 and mb_eta_m005 theta_e|E_e_q0 has p > 0.01 in all four runs",
+  "port": "in B the mean of the four he_eta_cuboid_m005 theta_e tail pulls is <= -2, or mb_eta_m005 theta_e|E_e_q0 has p < 0.01 in two or more of the four runs",
+  "otherwise": "inconclusive",
+  "consequences": {
+   "reference": "the control's V2 failure is reported as a reference fluctuation (with this check); the stock-sampler eta configuration stays validated on its first run",
+   "port": "eta is not called validated in the docs until the cause at these points is found",
+   "inconclusive": "reported as such; both references are kept on record"
+  },
+  "reporting": "the result of A and B and the verdict go into docs/gpu-validation.md whatever the outcome"
+ }
+}
