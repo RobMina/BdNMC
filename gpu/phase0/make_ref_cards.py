@@ -13,6 +13,9 @@ BASES = {  # base card stem -> (samplesize, max_trials)
     "he_pi0_cuboid_m005": (1_000_000, 1_000_000_000),
     "mb_brem_m005": (1_000_000_000, 20_000_000),
     "he_brem_cuboid_m005": (1_000_000_000, 20_000_000),
+    # eta (added 2026-10-29; appended so the earlier cards keep their seeds): 3.2e-4 / 6.1e-3 accepted per trial
+    "mb_eta_m005": (1_000_000, 5_000_000_000),
+    "he_eta_cuboid_m005": (1_000_000, 1_000_000_000),
 }
 MASSES_MEV = [1, 5, 20, 45]
 SEED0 = 2026102800

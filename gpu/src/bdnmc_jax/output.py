@@ -32,11 +32,11 @@ import time
 import numpy as np
 
 from . import card as cardmod, rng
-from .constants import MASS_ELECTRON, MASS_PION_NEUTRAL
+from .constants import MASS_ELECTRON, MASS_ETA, MASS_PION_NEUTRAL
 
 # Parent line per production channel as stock writes it (name, mass); None: no parent line (proton brem events
 # start with the V). Channel name in the summary file: DMGenerator::Channel_Name.
-PARENT = {"pi0_decay": ("pion", MASS_PION_NEUTRAL), "V_decay": None, "Brem_V": None}
+PARENT = {"pi0_decay": ("pion", MASS_PION_NEUTRAL), "eta_decay": ("eta", MASS_ETA), "V_decay": None, "Brem_V": None}
 CHANNEL_NAME = {"V_decay": "Dark_Bremsstrahlung", "Brem_V": "Dark_Bremsstrahlung"}
 FORMAT = "bdnmc-jax-events/1"
 

@@ -90,5 +90,21 @@ int main() {
                                 pbd.d2N_proton_brem_to_V(z, pt));
                 }
         }
+    // eta decay: its branching ratios, and the K0 parent laws used for eta (k0_sanfordwang, bpmt_k0), on the grids
+    // used for the pi0 laws above.
+    for (double mx : {0.001, 0.005, 0.02, 0.045}) {
+        std::printf("breta_to_gamma_dm_dm %.17g %.17g\n", mx, breta_to_gamma_dm_dm(mv, mx, kap, alD));
+        std::printf("bretatoVgamma %.17g %.17g\n", mx, bretatoVgamma(mv, mx, kap, alD));
+    }
+    sanfordwang swk("k0_sanfordwang");
+    BMPT bmptk(120.0, 12, PDG::K0);
+    for (int i = 1; i <= 40; i++) {
+        for (int j = 1; j <= 40; j++) {
+            double p = 7.89 * i / 40.0, th = (pi / 2) * j / 40.0;
+            std::printf("sanfordwang_k0 %.17g %.17g %.17g\n", p, th, std::sin(th) * swk.swK(p, th));
+            double pb = 110.0 * i / 40.0, tb = 0.2 * std::pow(j / 40.0, 2);
+            std::printf("bmpt_k0_ics %.17g %.17g %.17g\n", pb, tb, bmptk.Invariant_Cross_Section_Kaon(pb, tb));
+        }
+    }
     return 0;
 }

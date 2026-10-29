@@ -4,7 +4,8 @@
 # Usage: [V_SET=pi0|brem] [V_OUT=dir] [PY=python] [PARENT_SAMPLER=stock|envelope] [SEED_OFFSET=n] run_v_set.sh
 # (outputs in $V_OUT/<stem>/shard<k>.npz, default validation/out/v; existing shards are skipped). The backend is
 # JAX's default (GPU when one is visible). SEED_OFFSET (default 0) is added to every card's seed, for an independent
-# repeat. V_SET=brem runs the eight proton-brem points (v_config_brem.json), 2e7 trials each.
+# repeat. V_SET=brem runs the eight proton-brem points (v_config_brem.json), 2e7 trials each; V_SET=eta the eight
+# eta points (v_config_eta.json), 5e8 (mb) and 2e8 (he) trials each.
 set -o pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 out_dir=${V_OUT:-$root/validation/out/v}
@@ -20,6 +21,9 @@ case ${V_SET:-pi0} in
     brem) specs="mb_brem_m001:20000000 mb_brem_m005:20000000 mb_brem_m020:20000000 mb_brem_m045:20000000
                  he_brem_cuboid_m001:20000000 he_brem_cuboid_m005:20000000 he_brem_cuboid_m020:20000000
                  he_brem_cuboid_m045:20000000" ;;
+    eta) specs="mb_eta_m001:500000000 mb_eta_m005:500000000 mb_eta_m020:500000000 mb_eta_m045:500000000
+                he_eta_cuboid_m001:200000000 he_eta_cuboid_m005:200000000 he_eta_cuboid_m020:200000000
+                he_eta_cuboid_m045:200000000" ;;
     *) echo "unknown V_SET ${V_SET}"; exit 2 ;;
 esac
 for spec in $specs; do

@@ -140,16 +140,16 @@ def test_proton_brem(dump):
         assert r == pytest.approx(rate, rel=1e-10)
 
 
-def test_parent_densities(dump):
-    sw = parents.SanfordWang()
-    s = dump["sanfordwang"]
-    # (1 - p / (pB - c9)) is exactly 0 at p = ppimax, leaving only rounding; the exponent (up to ~100) adds
-    # |argument| to the conditioning.
+def _check_sanfordwang(sw, s):
+    # (1 - p / (pB - c9)) is exactly 0 at p = ppimax (for the pi0 fits), leaving only rounding; the exponent (up to
+    # ~100) adds |argument| to the conditioning.
+    c9 = sw.e[9] if sw.kind == "k0" else sw.c[9]
     with np.errstate(divide="ignore"):
-        cond = np.nan_to_num(1 / np.abs(1 - s[:, 0] / (sw.pB - sw.c[9])), posinf=1e16) + 200
+        cond = np.nan_to_num(1 / np.abs(1 - s[:, 0] / (sw.pB - c9)), posinf=1e16) + 200
     close(sw.density(jnp.asarray(s[:, 0]), jnp.asarray(s[:, 1])), s[:, 2], cond)
-    bm = parents.BMPT(120.0, 12.0)
-    b = dump["bmpt_ics"]
+
+
+def _check_bmpt_ics(bm, b, alpha):
     p, th = b[:, 0], b[:, 1]
     # xR's numerator cancels large terms, and (1 - xR)^alpha amplifies its error by alpha xR / (1 - xR).
     E, Mm = bm.beam_energy, bm.meson_mass
@@ -160,5 +160,21 @@ def test_parent_densities(dump):
     xr = np.asarray(bm.xR(jnp.asarray(p), jnp.asarray(th)))
     with np.errstate(divide="ignore", invalid="ignore"):
         cond_xr = terms / np.abs(xr * (bm.s - 1.88 ** 2 + Mm ** 2))
-        cond = 200 + cond_xr * (1 + 3.45 * np.abs(xr) / np.abs(1 - xr))
+        cond = 200 + cond_xr * (1 + alpha * np.abs(xr) / np.abs(1 - xr))
     close(bm.ics(jnp.asarray(p), jnp.asarray(th)), b[:, 2], np.nan_to_num(cond, nan=1e16, posinf=1e16))
+
+
+def test_parent_densities(dump):
+    _check_sanfordwang(parents.SanfordWang(), dump["sanfordwang"])
+    _check_bmpt_ics(parents.BMPT(120.0, 12.0), dump["bmpt_ics"], 3.45)
+
+
+def test_eta(dump):
+    if "breta_to_gamma_dm_dm" not in dump:
+        pytest.skip("v0_dump.txt predates the eta entries (rebuild the harness)")
+    for mx, br in dump["breta_to_gamma_dm_dm"]:
+        assert branching.breta_to_gamma_dm_dm(MV, mx, KAP, ALD) == pytest.approx(br, rel=REL)
+    for mx, br in dump["bretatoVgamma"]:
+        assert branching.bretatoVgamma(MV, mx, KAP, ALD) == pytest.approx(br, rel=REL)
+    _check_sanfordwang(parents.SanfordWang.k0(), dump["sanfordwang_k0"])
+    _check_bmpt_ics(parents.BMPT(120.0, 12.0, choice="k0"), dump["bmpt_k0_ics"], 2.45)

@@ -1022,5 +1022,517 @@
   "replica": 7,
   "seed": 2026103028,
   "max_trials": 2500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m001_r0",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 1,
+  "replica": 0,
+  "seed": 2026103029,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m001_r1",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 1,
+  "replica": 1,
+  "seed": 2026103030,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m001_r2",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 1,
+  "replica": 2,
+  "seed": 2026103031,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m001_r3",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 1,
+  "replica": 3,
+  "seed": 2026103032,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m001_r4",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 1,
+  "replica": 4,
+  "seed": 2026103033,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m001_r5",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 1,
+  "replica": 5,
+  "seed": 2026103034,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m001_r6",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 1,
+  "replica": 6,
+  "seed": 2026103035,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m001_r7",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 1,
+  "replica": 7,
+  "seed": 2026103036,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m005_r0",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 5,
+  "replica": 0,
+  "seed": 2026103037,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m005_r1",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 5,
+  "replica": 1,
+  "seed": 2026103038,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m005_r2",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 5,
+  "replica": 2,
+  "seed": 2026103039,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m005_r3",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 5,
+  "replica": 3,
+  "seed": 2026103040,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m005_r4",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 5,
+  "replica": 4,
+  "seed": 2026103041,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m005_r5",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 5,
+  "replica": 5,
+  "seed": 2026103042,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m005_r6",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 5,
+  "replica": 6,
+  "seed": 2026103043,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m005_r7",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 5,
+  "replica": 7,
+  "seed": 2026103044,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m020_r0",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 20,
+  "replica": 0,
+  "seed": 2026103045,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m020_r1",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 20,
+  "replica": 1,
+  "seed": 2026103046,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m020_r2",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 20,
+  "replica": 2,
+  "seed": 2026103047,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m020_r3",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 20,
+  "replica": 3,
+  "seed": 2026103048,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m020_r4",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 20,
+  "replica": 4,
+  "seed": 2026103049,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m020_r5",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 20,
+  "replica": 5,
+  "seed": 2026103050,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m020_r6",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 20,
+  "replica": 6,
+  "seed": 2026103051,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m020_r7",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 20,
+  "replica": 7,
+  "seed": 2026103052,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m045_r0",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 45,
+  "replica": 0,
+  "seed": 2026103053,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m045_r1",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 45,
+  "replica": 1,
+  "seed": 2026103054,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m045_r2",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 45,
+  "replica": 2,
+  "seed": 2026103055,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m045_r3",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 45,
+  "replica": 3,
+  "seed": 2026103056,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m045_r4",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 45,
+  "replica": 4,
+  "seed": 2026103057,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m045_r5",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 45,
+  "replica": 5,
+  "seed": 2026103058,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m045_r6",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 45,
+  "replica": 6,
+  "seed": 2026103059,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/mb_eta_m045_r7",
+  "base": "mb_eta_m005",
+  "m_chi_MeV": 45,
+  "replica": 7,
+  "seed": 2026103060,
+  "max_trials": 62500000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m001_r0",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 1,
+  "replica": 0,
+  "seed": 2026103061,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m001_r1",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 1,
+  "replica": 1,
+  "seed": 2026103062,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m001_r2",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 1,
+  "replica": 2,
+  "seed": 2026103063,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m001_r3",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 1,
+  "replica": 3,
+  "seed": 2026103064,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m001_r4",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 1,
+  "replica": 4,
+  "seed": 2026103065,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m001_r5",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 1,
+  "replica": 5,
+  "seed": 2026103066,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m001_r6",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 1,
+  "replica": 6,
+  "seed": 2026103067,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m001_r7",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 1,
+  "replica": 7,
+  "seed": 2026103068,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m005_r0",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 5,
+  "replica": 0,
+  "seed": 2026103069,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m005_r1",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 5,
+  "replica": 1,
+  "seed": 2026103070,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m005_r2",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 5,
+  "replica": 2,
+  "seed": 2026103071,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m005_r3",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 5,
+  "replica": 3,
+  "seed": 2026103072,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m005_r4",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 5,
+  "replica": 4,
+  "seed": 2026103073,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m005_r5",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 5,
+  "replica": 5,
+  "seed": 2026103074,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m005_r6",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 5,
+  "replica": 6,
+  "seed": 2026103075,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m005_r7",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 5,
+  "replica": 7,
+  "seed": 2026103076,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m020_r0",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 20,
+  "replica": 0,
+  "seed": 2026103077,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m020_r1",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 20,
+  "replica": 1,
+  "seed": 2026103078,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m020_r2",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 20,
+  "replica": 2,
+  "seed": 2026103079,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m020_r3",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 20,
+  "replica": 3,
+  "seed": 2026103080,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m020_r4",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 20,
+  "replica": 4,
+  "seed": 2026103081,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m020_r5",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 20,
+  "replica": 5,
+  "seed": 2026103082,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m020_r6",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 20,
+  "replica": 6,
+  "seed": 2026103083,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m020_r7",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 20,
+  "replica": 7,
+  "seed": 2026103084,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m045_r0",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 45,
+  "replica": 0,
+  "seed": 2026103085,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m045_r1",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 45,
+  "replica": 1,
+  "seed": 2026103086,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m045_r2",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 45,
+  "replica": 2,
+  "seed": 2026103087,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m045_r3",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 45,
+  "replica": 3,
+  "seed": 2026103088,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m045_r4",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 45,
+  "replica": 4,
+  "seed": 2026103089,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m045_r5",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 45,
+  "replica": 5,
+  "seed": 2026103090,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m045_r6",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 45,
+  "replica": 6,
+  "seed": 2026103091,
+  "max_trials": 25000000
+ },
+ {
+  "stem": "ref_w/he_eta_cuboid_m045_r7",
+  "base": "he_eta_cuboid_m005",
+  "m_chi_MeV": 45,
+  "replica": 7,
+  "seed": 2026103092,
+  "max_trials": 25000000
  }
 ]

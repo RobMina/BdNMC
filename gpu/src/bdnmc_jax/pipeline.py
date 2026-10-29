@@ -46,6 +46,10 @@ def _envelope(dist):
 
 
 PARENT_SAMPLERS = ("stock", "envelope")
+# Meson channels (Kinetic_Mixing.cpp:133-155): meson mass, Evaluate_Branching_Ratio, the ported distributions.
+# Stock also accepts bmpt for eta and the K0 distributions for pi0; those pairs are not validated, so refused.
+MESONS = {"pi0_decay": (MASS_PION_NEUTRAL, branching.pi0_channel, ("pi0_sanfordwang", "bmpt")),
+          "eta_decay": (MASS_ETA, branching.eta_channel, ("k0_sanfordwang", "bpmt_k0"))}
 
 
 def setup(card, parent_sampler="stock"):
@@ -70,27 +74,33 @@ def setup(card, parent_sampler="stock"):
         if ch.production_channel in ("V_decay", "Brem_V") and ch.production_distribution == "proton_brem":
             chans.append(_brem_channel(card, ch, parent_sampler))
             continue
-        if ch.production_channel != "pi0_decay":
+        if ch.production_channel not in MESONS:
             raise NotImplementedError(f"channel {ch.production_channel} with {ch.production_distribution}")
-        br, off = branching.pi0_channel(card.mass_v, card.mass_dm, card.epsilon, card.alpha_d)
-        if not branching.uses_on_shell_decay(off, card.mass_v, card.mass_dm, MASS_PION_NEUTRAL):
-            raise NotImplementedError("off-shell pi0 decay")
-        if ch.production_distribution == "pi0_sanfordwang":
+        m_meson, channel_br, dists = MESONS[ch.production_channel]
+        if ch.production_distribution not in dists:
+            raise NotImplementedError(f"{ch.production_channel} with {ch.production_distribution}")
+        br, off = channel_br(card.mass_v, card.mass_dm, card.epsilon, card.alpha_d)
+        if not branching.uses_on_shell_decay(off, card.mass_v, card.mass_dm, m_meson):
+            raise NotImplementedError(f"off-shell {ch.production_channel}")
+        if br <= 0:
+            raise NotImplementedError(f"{ch.production_channel} closed (2 m_chi > meson mass)")
+        if ch.production_distribution in ("pi0_sanfordwang", "k0_sanfordwang"):
             if "sanfordwang_file" in ch.raw or "distribution_parameter_file" in ch.raw:
                 raise NotImplementedError("Sanford-Wang parameter file")
-            dist = parents.SanfordWang()
+            dist = parents.SanfordWang() if ch.production_distribution == "pi0_sanfordwang" else parents.SanfordWang.k0()
             fmax = dist.fmax
-        elif ch.production_distribution == "bmpt":
+        elif ch.production_distribution in ("bmpt", "bpmt_k0"):
             if ch.max_meson_momentum > 0:
                 raise NotImplementedError("max_meson_momentum")
-            dist = parents.BMPT(card.beam_energy, card.target_mass_number)
+            dist = parents.BMPT(card.beam_energy, card.target_mass_number,
+                                choice="pi0" if ch.production_distribution == "bmpt" else "k0")
             fmax = dist.find_fmax()
         else:
             raise NotImplementedError(f"distribution {ch.production_distribution}")
         if parent_sampler == "envelope":
             dist, fmax = _envelope(dist), 1.0
         vnum = br * card.pot * ch.meson_per_pi0 * card.pi0_per_pot  # Kinetic_Mixing.cpp:141
-        chans.append(Channel(ch.production_channel, MASS_PION_NEUTRAL, dist, float(fmax), vnum,
+        chans.append(Channel(ch.production_channel, m_meson, dist, float(fmax), vnum,
                              card.mass_v, card.mass_dm))
     if len(chans) != 1:
         raise NotImplementedError("exactly one production channel for now")

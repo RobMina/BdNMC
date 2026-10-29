@@ -28,7 +28,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from .constants import MASS_PROTON as mp, MASS_PION_CHARGED, pi
+from .constants import MASS_PROTON as mp, MASS_KAON_CHARGED, MASS_PION_CHARGED, pi
 from . import rng
 
 
@@ -41,12 +41,20 @@ def polar(mom, th, ph):
 
 @dataclass(frozen=True)
 class SanfordWang:
-    """Stock defaults (sanfordwang.h); the card's beam_energy does not enter."""
+    """Stock defaults (sanfordwang.h); the card's beam_energy does not enter. kind "pi0" (`pi0_sanfordwang`: pi+ and
+    pi- fits, bar fpi0max) or "k0" (`k0_sanfordwang`, stock's eta parents: the K0 fit, bar sigKmax = 0.6506, same
+    momentum range); build the latter with `SanfordWang.k0()`."""
     pB: float = 8.89
     ppimax: float = 7.8900
     fmax: float = 54.25
     c: tuple = (0, 220.7000, 1.080000, 1.000000, 1.978000, 1.320000, 5.572000, 0.086800, 9.686000, 1.000000)
     d: tuple = (0, 213.7000, 0.937900, 5.454000, 1.210000, 1.284000, 4.781000, 0.073380, 8.329000, 1.000000)
+    kind: str = "pi0"
+    e: tuple = (0, 15.130, 1.975, 4.084, 0.928, 0.731, 4.362, 0.048, 13.300, 1.278)
+
+    @classmethod
+    def k0(cls):
+        return cls(fmax=0.6506, kind="k0")
 
     def _sw(self, c, p, th):
         pB = self.pB
@@ -54,7 +62,10 @@ class SanfordWang:
             -c[3] * p ** c[4] / pB ** c[5] - c[6] * th * (p - c[7] * pB * jnp.cos(th) ** c[8]))
 
     def density(self, p, th):
-        """sin(theta) (swpim + swpip), the quantity pi0sample compares with fpi0max."""
+        """sin(theta) (swpim + swpip), the quantity pi0sample compares with fpi0max; for "k0", sin(theta) swK
+        (K0sample against sigKmax)."""
+        if self.kind == "k0":
+            return jnp.sin(th) * self._sw(self.e, p, th)
         return jnp.sin(th) * (self._sw(self.d, p, th) + self._sw(self.c, p, th))
 
     def propose(self, key, pool):
@@ -79,18 +90,26 @@ class SanfordWang:
 
 _A, _B, _alpha, _beta, _a, _gamma, _delta, _r0, _r1, _MXBAR = 62.3, 1.57, 3.45, 0.517, 6.10, 0.153, 0.478, 1.05, 2.65, 1.88
 _BE_MASS_NUMBER = 8.0
+# namespace Kaon (BMPT_dist.cpp); its A (7.74), r0 and r1 are not used by the K0 sampler (below)
+_K_B, _K_alpha, _K_beta, _K_a, _K_gamma = 0.0, 2.45, 0.444, 5.04, 0.121
+_K_delta = 2 * _K_gamma
 
 
 @dataclass(frozen=True)
 class BMPT:
+    """choice "pi0" (`bmpt`) or "k0" (`bpmt_k0`, stock's eta parents). Stock's K0 choice, kept: the meson mass is the
+    charged kaon's; Invariant_Cross_Section_Kaon multiplies by the pion fit's A (62.3, not Kaon::A, a constant factor
+    that the bar absorbs); and the K0 density uses the pion ratio pratio, not pratio_Kaon, in (1 + 3/pratio)/2."""
     beam_energy: float
     mass_number: float
     margin: float = 1.02
     max_shrinks: int = 400
+    choice: str = "pi0"
 
     @property
     def meson_mass(self):
-        return MASS_PION_CHARGED  # stock uses the charged-pion mass for the pi0 choice
+        # stock uses the charged-pion mass for the pi0 choice and the charged-kaon mass for K0
+        return MASS_KAON_CHARGED if self.choice == "k0" else MASS_PION_CHARGED
 
     @property
     def s(self):
@@ -118,20 +137,27 @@ class BMPT:
         return g * (p * jnp.cos(th) - b * jnp.sqrt(p * p + self.meson_mass ** 2)) / math.sqrt(self.s)
 
     def ics(self, p, th):
-        """BMPT::Invariant_Cross_Section."""
+        """BMPT::Invariant_Cross_Section (pi0), or Invariant_Cross_Section_Kaon (k0)."""
+        if self.choice == "k0":
+            a, B, alpha, beta, gamma, delta = _K_a, _K_B, _K_alpha, _K_beta, _K_gamma, _K_delta
+        else:
+            a, B, alpha, beta, gamma, delta = _a, _B, _alpha, _beta, _gamma, _delta
         x = self.xR(p, th)
         pT = p * jnp.sin(th)
-        ap = _a / x ** _gamma
-        bp = _a * _a / (2 * x ** _delta)
+        ap = a / x ** gamma
+        bp = a * a / (2 * x ** delta)
         xf = self.xF(p, th)
         alphaf = (0.74 - 0.55 * xf + 0.26 * xf ** 2) * (0.98 + 0.21 * pT)
-        return (_A * (1.0 - x) ** _alpha * (1.0 + _B * x) * x ** (-1.0 * _beta) * (1 + ap * pT + bp * pT * pT)
+        return (_A * (1.0 - x) ** alpha * (1.0 + B * x) * x ** (-1.0 * beta) * (1 + ap * pT + bp * pT * pT)
                 * jnp.exp(-ap * pT) * (self.mass_number / _BE_MASS_NUMBER) ** alphaf)
 
     def density(self, p, th):
-        """The `prob` of BMPT::sample_momentum for the pi0 choice."""
+        """The `prob` of BMPT::sample_momentum."""
         M = self.meson_mass
         pratio = _r0 * (1 + self.xR(p, th)) ** _r1
+        if self.choice == "k0":
+            return (2 * pi * jnp.sin(th) * p ** 2 / jnp.sqrt(p * p + M ** 2) * self.ics(p, th)
+                    * (1.0 + 3.0 / pratio) / 2)
         return 2 * pi * jnp.sin(th) * p ** 2 / jnp.sqrt(p * p + M ** 2) * self.ics(p, th) * (1.0 + 1.0 / pratio)
 
     def propose(self, key, pool):

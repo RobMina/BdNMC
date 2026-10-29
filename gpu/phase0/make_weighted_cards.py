@@ -15,6 +15,10 @@ TRIALS = {  # base card stem -> total weighted trials per reference point, split
     "he_pi0_cuboid_m005": 40_000_000,
     "mb_brem_m005": 20_000_000,
     "he_brem_cuboid_m005": 20_000_000,
+    # eta (appended so the earlier cards keep their seeds). bpmt_k0 shares BMPT's running-maximum bar, whose bias
+    # shrinks with run length (5e6-trial pi0 replicas came out 0.2 % low), so its replicas are 2.5e7 trials each.
+    "mb_eta_m005": 500_000_000,
+    "he_eta_cuboid_m005": 200_000_000,
 }
 MASSES_MEV = [1, 5, 20, 45]
 SEED0 = 2026102900

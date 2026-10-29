@@ -1,0 +1,65 @@
+{
+  "_comment": "V1/V2 for eta decay (eta_decay with k0_sanfordwang on mb_eta, bpmt_k0 on he_eta_cuboid). Thresholds, binning and variables copied unchanged from v_config.json (sha256 7058b254...); only the points differ. Frozen 2026-10-29 before the first eta port-against-stock comparison. compare_v.py records this file's sha256 in every result. For eta events the parent is the eta.",
+  "frozen": "2026-10-29",
+  "copied_from": "v_config.json (sha256 7058b254019718dd6d98f269a6f212398abd7c57006f8b0e2e279aa971c0467a)",
+  "points": [
+    "mb_eta_m001",
+    "mb_eta_m005",
+    "mb_eta_m020",
+    "mb_eta_m045",
+    "he_eta_cuboid_m001",
+    "he_eta_cuboid_m005",
+    "he_eta_cuboid_m020",
+    "he_eta_cuboid_m045"
+  ],
+  "port_trials": {
+    "mb_eta": 500000000,
+    "he_eta_cuboid": 200000000
+  },
+  "V1": {
+    "main_reference": "stock weighted se (phase0/out/ref_w, 8 replicas, sigma from replica spread; 5e8 / 2e8 trials per point for mb_eta / he_eta)",
+    "port_quantity": "port weighted se = sum(prob) / trials x Vnum, sigma from per-trial sum of prob (both DM of a trial together)",
+    "max_abs_pull_per_point": 3.0,
+    "max_abs_mean_pull_times_sqrt_n": 3.0,
+    "min_chi2_p_value_over_points": 0.01,
+    "secondary_reference": "stock unweighted se (phase0/out/ref), Poisson on accepted DM",
+    "secondary_tolerance": "within max(1 %, 2 sigma); expected to show the stock running-pMax bias",
+    "also_reported": "port two-pass unweighted se against both references (not a pass criterion)"
+  },
+  "V2": {
+    "port_sample": "all port candidates with prob > 0, weighted by prob (weighted chi2 uses sum of squared weights)",
+    "stock_sample": "every recoil electron in the stock unweighted event file (phase0/out/ref/<stem>/O2/events.dat), with its incoming DM and parent pion",
+    "variables": [
+      "E_e",
+      "theta_e",
+      "E_e_theta_e2",
+      "E_chi",
+      "theta_chi",
+      "vertex_x",
+      "vertex_y",
+      "vertex_z",
+      "parent_p",
+      "parent_theta"
+    ],
+    "conditional": {
+      "variable": "theta_e",
+      "in_quantiles_of": "E_e",
+      "n_slices": 4
+    },
+    "n_bins": 40,
+    "binning": "equal stock population; outer edges open (-inf, +inf)",
+    "min_expected_per_bin": 25,
+    "test": "two-sample chi2 of normalised shapes, ndf = n_bins - 1; p-value from the chi2 distribution",
+    "pass_ks_uniform_p_min": 0.01,
+    "pass_min_single_p": 0.0001,
+    "tails": {
+      "variables": [
+        "E_e",
+        "theta_e"
+      ],
+      "stock_quantile": 0.99,
+      "max_abs_pull": 3.0
+    },
+    "fail_closed": "any NaN, any bin with stock count < min_expected, or any empty port bin fails the histogram"
+  }
+}
