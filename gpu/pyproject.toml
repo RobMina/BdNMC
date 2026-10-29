@@ -10,7 +10,8 @@ requires-python = ">=3.11"
 dependencies = ["jax", "numpy"]
 
 [project.optional-dependencies]
-test = ["pytest", "scipy"]
+test = ["pytest", "scipy", "h5py"]
+hdf5 = ["h5py"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

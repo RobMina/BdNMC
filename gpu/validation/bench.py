@@ -1,20 +1,22 @@
 """Throughput of pass 1 + pass 2 on one card: compile time, steady-state trials/s, candidates/s and accepted
 (unweighted, two-pass) events/s, for a grid of blocks-per-call batch sizes; and the device-only rate (no host
-transfer or checks) at each batch size. Output writing is not included (goal P1 excludes it).
+transfer or checks) at each batch size. With --write hdf5 (goal P1's binary output) or --write text, writing the
+accepted events is timed and included in the end-to-end rate; the file is deleted afterwards.
 
-Usage: bench.py <card> <n_trials> [--batch 1 4 16] [--cap C] [--json out.json]
+Usage: bench.py <card> <n_trials> [--batch 1 4 16] [--cap C] [--write none|hdf5|text] [--out-dir D] [--json out.json]
 """
 import argparse
 import json
 from pathlib import Path
 import sys
+import tempfile
 import time
 
 import jax
 import jax.numpy as jnp
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from bdnmc_jax import card as cardmod, pipeline, rng  # noqa: E402
+from bdnmc_jax import card as cardmod, output, pipeline, rng  # noqa: E402
 
 
 def device_only(card_path, batch, cap, n_calls, parent_sampler):
@@ -37,6 +39,9 @@ def main():
     ap.add_argument("--batch", type=int, nargs="+", default=[1, 4, 16])
     ap.add_argument("--cap", type=int, default=1024)
     ap.add_argument("--parent-sampler", default="stock", choices=pipeline.PARENT_SAMPLERS)
+    ap.add_argument("--write", choices=["none", "hdf5", "text"], default="none",
+                    help="also write the accepted events (to --out-dir) and include the write in the end-to-end rate")
+    ap.add_argument("--out-dir", type=Path, default=Path(tempfile.gettempdir()))
     ap.add_argument("--json", type=Path)
     args = ap.parse_args()
     kw = {"parent_sampler": args.parent_sampler}
@@ -50,15 +55,26 @@ def main():
         cap = warm["cap"]
         t = time.perf_counter()
         res = pipeline.finish(pipeline.candidates(args.card, args.n_trials, batch=b, cap=cap, **kw))
-        dt = time.perf_counter() - t
+        t_gen = time.perf_counter() - t
+        t_write, size = 0.0, 0
+        if args.write != "none":
+            path = args.out_dir / f"bench_{args.card.stem}_b{b}.{'h5' if args.write == 'hdf5' else 'dat'}"
+            t = time.perf_counter()
+            (output.write_hdf5 if args.write == "hdf5" else output.write_text)(res, path)
+            t_write = time.perf_counter() - t
+            size = path.stat().st_size
+            path.unlink()
+        dt = t_gen + t_write
         dev = device_only(args.card, b, cap, max(2, min(50, args.n_trials // (b * rng.BLOCK))), args.parent_sampler)
-        r = {"batch": b, "cap": cap, "first_call_s": t_warm, "wall_s": dt, "trials_per_s": res["trials"] / dt,
+        r = {"batch": b, "cap": cap, "first_call_s": t_warm, "generate_s": t_gen, "write": args.write,
+             "write_s": t_write, "file_bytes": size, "wall_s": dt, "trials_per_s": res["trials"] / dt,
              "candidates_per_s": res["n_hits"] / dt, "accepted": res["accepted"], "accepted_per_s": res["accepted"] / dt,
              "device_only_trials_per_s": dev}
         out["runs"].append(r)
         print(f"batch {b:3d} cap {cap:6d}: first call {t_warm:6.1f} s; {r['trials_per_s'] / 1e6:8.2f} M trials/s, "
-              f"{r['accepted_per_s'] / 1e3:8.1f} k accepted/s end to end; device only {dev / 1e6:8.2f} M trials/s",
-              flush=True)
+              f"{r['accepted_per_s'] / 1e3:8.1f} k accepted/s end to end"
+              + (f" (write {args.write} {t_write:.2f} s, {size / 1e6:.1f} MB)" if args.write != "none" else "")
+              + f"; device only {dev / 1e6:8.2f} M trials/s", flush=True)
     if args.json:
         args.json.write_text(json.dumps(out, indent=1))
 

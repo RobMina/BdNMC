@@ -39,7 +39,7 @@ def main():
         sys.exit(1)
     worst = {}
     for k in pipeline.CANDIDATE_KEYS:
-        if k in INDEX_KEYS:
+        if k in INDEX_KEYS or k not in oc:  # keys added after the shard was written are not compared
             continue
         a, b = np.asarray(nc[k], float), np.asarray(oc[k], float)
         both_nan = np.isnan(a) & np.isnan(b)

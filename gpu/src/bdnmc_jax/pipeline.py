@@ -158,6 +158,7 @@ def _block(det, sc, ch, e_density, seed, chan_index, block_index, n_valid, cap):
         "slot": idx, "trial": trial, "prob": prob[safe], "u_acc": u_acc, "ang_ok": ang_ok,
         "recoil_done": recoil_done, "dm": cdm, "electron": e4, "recoil_dm": r4, "vertex": vtx,
         "parent": par[trial], "mediator": med[trial], "L": L[safe],
+        "crossing": jnp.stack([ct_in, ct_out], axis=-1),  # stock's Particle::crossing (entry, exit); p x t is metres
     }
 
 
@@ -170,7 +171,7 @@ def blocks_batch(det, sc, ch, e_density, seed, chan_index, block_indices, n_vali
 
 
 CANDIDATE_KEYS = ("block", "trial", "slot", "prob", "u_acc", "ang_ok", "dm", "electron", "recoil_dm", "vertex",
-                  "parent", "mediator", "L")
+                  "parent", "mediator", "L", "crossing")
 
 
 def candidates(card_path, n_trials, seed=None, blocks=None, batch=8, cap=1024, parent_sampler="stock"):
@@ -244,7 +245,8 @@ def merge(shards):
     if len(blocks) != len(set(blocks)):
         raise ValueError("overlapping shards")
     order = sorted(range(len(shards)), key=lambda i: shards[i]["blocks"][0])
-    cat = {k: np.concatenate([shards[i]["candidates"][k] for i in order]) for k in CANDIDATE_KEYS}
+    keys = [k for k in CANDIDATE_KEYS if all(k in s["candidates"] for s in shards)]  # older shards lack some
+    cat = {k: np.concatenate([shards[i]["candidates"][k] for i in order]) for k in keys}
     return first | {"blocks": blocks, "trials": sum(s["trials"] for s in shards),
                     "n_hits": sum(s["n_hits"] for s in shards), "prob_sum": sum(s["prob_sum"] for s in shards),
                     "parent_over_bar": sum(s["parent_over_bar"] for s in shards), "candidates": cat}
@@ -262,7 +264,7 @@ def finish(res, weighted=False):
         accepted = (cat["prob"] > cat["u_acc"] * pmax) & cat["ang_ok"]
         se = accepted.sum() / n * res["vnum"] * pmax * res["efficiency"]
     return res | {"pmax": pmax, "se": se, "se_weighted": weight_sum / n * res["vnum"] * res["efficiency"],
-                  "accepted": int(accepted.sum()), "accepted_mask": accepted}
+                  "accepted": int(accepted.sum()), "accepted_mask": accepted, "weighted": weighted}
 
 
 def run(card_path, n_trials, seed=None, weighted=False, **kw):
