@@ -1,0 +1,34 @@
+{
+ "_comment": "Pre-declared before running: an independent repeat of V1/V2 for parent_sampler=envelope, after the first envelope run failed V2. Committed before the jobs start; the result is judged only by the rule below.",
+ "declared": "2026-10-29",
+ "previous_result": {
+  "commit": "ed09f8d",
+  "parent_sampler": "envelope",
+  "seed_offset": 0,
+  "V1": "pass (max |pull| 2.51, mean pull +0.84, chi2 p 0.031)",
+  "V2": "fail: min p 5.6e-5 < 1e-4 (he_pi0_cuboid_m045 parent_theta); KS 0.12; max tail pull 2.31",
+  "follow_up": "compare_parent_samplers.py, 1.34e8 parents per sampler on an A100: no difference in p, theta, pT or v (p 0.14-0.88)"
+ },
+ "rerun": {
+  "parent_sampler": "envelope",
+  "seed_offset": 1000000,
+  "trials": "as validation/run_v_set.sh (5e8 per mb_pi0 point, 4e7 per he_pi0 point)",
+  "criteria": "validation/v_config.json, unchanged (sha256 7058b254019718dd6d98f269a6f212398abd7c57006f8b0e2e279aa971c0467a)",
+  "reference": "the same stock reference sets as every earlier run"
+ },
+ "control": {
+  "parent_sampler": "stock",
+  "seed_offset": 1000000,
+  "role": "reported alongside; a failure here would point at the criteria or the reference, not at the envelope, and is reported as such"
+ },
+ "decision_rule": {
+  "envelope_validated_if_all": [
+   "the rerun passes every V1 and V2 criterion of v_config.json",
+   "the histogram that failed before, he_pi0_cuboid_m045 parent_theta, has p > 0.01 in the rerun",
+   "no envelope bound violation (parent_over_bar = 0) in any shard"
+  ],
+  "otherwise": "not validated; next step is a targeted look at the parents of detected DM (theta, p) in the envelope against the stock sampler at high statistics",
+  "no_further_reruns": "a third run to obtain a pass is not allowed under this rule; it would need a new declaration with reasons",
+  "reporting": "both envelope runs (failed and rerun) and the control are reported in docs/gpu-validation.md whatever the outcome"
+ }
+}
