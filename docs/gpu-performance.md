@@ -5,10 +5,14 @@ Throughput of stock BdNMC and of the JAX port, measured on the environments in
 must pass, is in [gpu-validation.md](gpu-validation.md).
 
 **Target (P1):** at least 100x one core of stock `-O2`, in accepted events per second, on each of the four 5 MeV
-generic cards, on a full A100 in float64, with binary output included and compile time reported separately.
-**Status (2026-10-29):** provisional, pi0 cards only, no output written. The validated configuration reaches 126x on
-`mb_pi0` and 86x on `he_pi0`. The faster envelope sampler (197x and 747x) has not passed V2. The brem cards are not
-ported.
+generic cards. Measured on a full A100 in float64, with binary output included and compile time reported
+separately.
+**Status (2026-10-29):** met on the two pi0 cards with HDF5 output included, for both validated parent samplers:
+- stock sampler: 126x on `mb_pi0`, 109x on `he_pi0`;
+- envelope sampler: 188x on `mb_pi0`, 500x on `he_pi0`.
+
+Not yet the full P1: the brem cards are not ported, the stock baseline is a laptop core rather than a core of the
+GPU node, and the MIG and whole-node figures are not measured.
 
 ## Stock BdNMC (L1, one core)
 
@@ -52,7 +56,29 @@ Speed-up of G1 at batch 64 over one L1 core of stock, in accepted events per sec
 | `mb_pi0` | **126x** | 376x |
 | `he_pi0_cuboid` | **86x** | 461x |
 
-### Envelope parent sampler (not validated), commit `ed09f8d`
+### With HDF5 output (P1 configuration), commit `efc2607`
+
+`bench.py --write hdf5`: the accepted DM written to an HDF5 file on the cluster's shared scratch file system (one
+row per DM, about 260 bytes), the write timed and included; 1.34e8 trials per point.
+
+| Card | Sampler | Batch | Trials/s | Accepted/s | HDF5 write | vs stock `-O2` / `-O0` |
+|---|---|---|---|---|---|---|
+| `mb_pi0` | stock | 64 / 256 | 97.2 / 112.4 M | 72.5 / **83.8 k** | 0.05-0.13 s, 26 MB | **126x** / 376x |
+| `he_pi0_cuboid` | stock | 64 / 256 | 14.1 / 16.3 M | 167.4 / **193.7 k** | 0.61-0.64 s, 422 MB | **109x** / 580x |
+| `mb_pi0` | envelope | 64 / 256 | 141.0 / 167.3 M | 105.8 / **125.5 k** | 0.05-0.09 s, 27 MB | **188x** / 563x |
+| `he_pi0_cuboid` | envelope | 64 / 256 | 65.9 / 74.9 M | 784.8 / **892.0 k** | 0.61-0.64 s, 422 MB | **500x** / 2,670x |
+
+- **First calls:** 4.7-5.7 s (`mb_pi0`) and 9.7-12.5 s (`he_pi0`), excluded.
+- **Cost of the write:** on `he_pi0` with the envelope, writing is about a third of the end-to-end time (device
+  only: 257 M trials/s).
+- **Text output** (`--write text`, stock's format, `he_pi0` envelope, 3.4e7 trials) takes 18.3 s for 0.4 M events
+  (272 MB): 21 k accepted/s end to end. That is a 12x speed-up over stock `-O2`, so text is for small samples and
+  compatibility, not throughput.
+- **`he_pi0` stock-sampler variation:** the stock sampler on `he_pi0` reached 167 k accepted/s at batch 64 in this
+  job against 154 k in the earlier one (`7c3fbe0`, no output). The generation code is unchanged, so this is
+  run-to-run variation (a different node).
+
+### Envelope parent sampler without output, commit `ed09f8d`
 
 | Card | Env | Batch | Trials/s | Accepted/s | Device only, trials/s | vs stock `-O2` / `-O0` |
 |---|---|---|---|---|---|---|
@@ -61,7 +87,8 @@ Speed-up of G1 at batch 64 over one L1 core of stock, in accepted events per sec
 | `he_pi0_cuboid` | L1 (one core) | 1 | 4.5 M (profile) | | | |
 | `he_pi0_cuboid` | G1 | 16 / 64 / 256 | 74.1 / 89.6 / **111.8 M** | 883 / 1,067 / **1,332 k** | 125.2 / 213.6 / 251.4 M | 747x / 3,990x |
 
-These numbers cannot be quoted as P1 until the envelope configuration passes V1 and V2.
+The envelope configuration has since passed V1 and V2 (pre-declared repeat, [gpu-validation.md](gpu-validation.md#the-envelope-sampler)).
+The P1 figures are the ones with output in the table above.
 
 ## Where the time goes
 
@@ -86,7 +113,6 @@ end-to-end), against 17-23 % with the stock sampler at batch 64.
 
 ## What is not measured yet
 
-- Binary output (part of the P1 definition) and the text writer.
 - A stock baseline on a core of the GPU node itself, and the whole-node comparison.
 - A MIG slice.
 - The brem cards (not ported).
@@ -97,7 +123,7 @@ end-to-end), against 17-23 % with the stock sampler at batch 64.
 
 ```bash
 cd gpu
-python validation/bench.py phase0/cards/ref/mb_pi0_m005.dat 134217728 --batch 16 64 256 [--parent-sampler envelope]
+python validation/bench.py phase0/cards/ref/mb_pi0_m005.dat 134217728 --batch 16 64 256 [--parent-sampler envelope] [--write hdf5 --out-dir DIR]
 python validation/profile_port.py phase0/cards/ref/he_pi0_cuboid_m005.dat --batch 16 64 256 [--parent-sampler envelope]
 ```
 

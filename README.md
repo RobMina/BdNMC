@@ -43,7 +43,10 @@ parameter cards and is validated statistically against this code.
 - sphere and cuboid detectors;
 - `NCE_electron` scattering.
 
-**Throughput:** on one NVIDIA A100, 86-126x one core of an optimised stock build. See [gpu/README.md](gpu/README.md).
+**Output:** stock's text event format or HDF5.
+
+**Throughput:** on one NVIDIA A100, with HDF5 output, 109-500x one core of an optimised stock build, depending on
+the card and the parent sampler. See [gpu/README.md](gpu/README.md).
 
 ## Layout
 

@@ -4,10 +4,14 @@ How the JAX port in [`gpu/`](../gpu) is checked against stock BdNMC, and the res
 G1 A100 node) are described in [test-environments.md](test-environments.md); throughput is in
 [gpu-performance.md](gpu-performance.md).
 
-**Status (2026-10-29).** For the scope the port implements (pi0 decay with Sanford-Wang or BMPT production, on-shell
-`DecayDM`, sphere and cuboid detectors, `NCE_electron`), the default configuration (`parent_sampler="stock"`) passes
-V0, V1 and V2 on CPU (L1) and on an A100 (G1). The opt-in `parent_sampler="envelope"` **fails V2** and is not
-validated. Nothing else (eta, brem, off-shell decays, other detectors or signals, output files) is validated yet.
+**Status (2026-10-29).** Scope: pi0 decay with Sanford-Wang or BMPT production, on-shell `DecayDM`, sphere and
+cuboid detectors, `NCE_electron`.
+- **`parent_sampler="stock"`** (the default) passes V0, V1 and V2 on CPU (L1) and on an A100 (G1).
+- **`parent_sampler="envelope"`** is validated on G1 under a pre-declared repeat rule, after failing V2 once (see
+  [below](#the-envelope-sampler)).
+- **Not validated yet:** eta, brem, off-shell decays, other detectors or signals.
+- **Event output** (text and HDF5) is tested for format and content ([Unit tests](#unit-tests)); it does not change
+  the physics.
 
 ## Method
 
@@ -131,6 +135,11 @@ Thresholds and binning were frozen in `gpu/validation/v_config.json` before the 
 | stock sampler, GPU | G1 | `846cead` | same as CPU to 11-12 digits | same | **pass** |
 | stock sampler, GPU, traced masses + batching | G1 | `7c3fbe0` | 2.15 / +0.80 / 0.47 | 0.50 / 0.0028 / 2.51 | **pass** |
 | envelope sampler, GPU | G1 | `ed09f8d` | 2.51 / +0.84 / 0.031 | 0.12 / **5.6e-5** / 2.31 | **fail** (V2 min p < 1e-4) |
+| envelope sampler, GPU, new seeds (pre-declared repeat) | G1 | `91c2c3e` | 1.51 / +0.22 / 0.71 | 1.00 / 0.0082 / 2.24 | **pass** |
+| stock sampler, GPU, new seeds (control) | G1 | `91c2c3e` | 1.67 / +0.76 / 0.48 | 0.24 / 0.0039 / 1.93 | **pass** |
+
+"New seeds" adds 1,000,000 to every reference card's seed (`SEED_OFFSET` in `validation/run_v_set.sh`). The stock
+reference sets are the same for every row.
 
 Per point, stock sampler, V1:
 
@@ -145,22 +154,38 @@ Per point, stock sampler, V1:
 - Secondary: the port is 0.03-0.62 % below stock unweighted `se`, inside the 1 % floor, the sign and size of the
   running-pMax bias.
 
-### The envelope sampler (not validated)
+### The envelope sampler
 
 `parent_sampler="envelope"` samples the same parent law as stock's proposal, with a piecewise bound on a (p, v) grid
 instead of one bar (see `gpu/src/bdnmc_jax/parents.py`). It draws different random numbers.
-- **Its V2 fails:** parent theta at `he_pi0` 45 MeV has p = 5.6e-5 (and 0.018 at 1 MeV).
-- **V1** passes, but with chi2 p = 0.031 (pulls +2.06, +0.07, +0.58, -0.76 for `mb_pi0` and +2.51, -0.27, +2.30,
+
+**First run (`ed09f8d`): V2 failed.**
+- Parent theta at `he_pi0` 45 MeV had p = 5.6e-5 (and 0.018 at 1 MeV).
+- V1 passed, but with chi2 p = 0.031 (pulls +2.06, +0.07, +0.58, -0.76 for `mb_pi0` and +2.51, -0.27, +2.30,
   +0.19 for `he_pi0`).
-- **The high-statistics check found no difference in the parent law.** `validation/compare_parent_samplers.py` on
-  G1 drew 1.34e8 parents from each sampler:
-  - `he_pi0` (BMPT): p, theta (log bins down to 1e-5 rad), pT and v = theta / theta*(p) give p = 0.54, 0.40, 0.88
-    and 0.14;
-  - `mb_pi0` (Sanford-Wang): p, theta and pT give p = 0.64, 0.53 and 0.54;
-  - no proposal exceeded its bound.
-- The V2 failure may be a fluctuation (with 112 histograms, a minimum p this low happens about 0.6 % of the time)
-  or a difference confined to the parents of detected DM. Until a fresh, pre-declared V1/V2 run settles it, the
-  envelope stays opt-in and unvalidated.
+
+**High-statistics check: no difference in the parent law.** `validation/compare_parent_samplers.py` on G1 drew
+1.34e8 parents from each sampler:
+- `he_pi0` (BMPT): p, theta (log bins down to 1e-5 rad), pT and v = theta / theta*(p) give p = 0.54, 0.40, 0.88 and
+  0.14;
+- `mb_pi0` (Sanford-Wang): p, theta and pT give p = 0.64, 0.53 and 0.54;
+- no proposal exceeded its bound.
+
+**Pre-declared repeat (`gpu/validation/v_rerun_envelope_20261029.json`, committed before the jobs ran).**
+- Rule: the envelope is validated only if a run with new seeds
+  1. passes every V1 and V2 criterion,
+  2. gives p > 0.01 for the histogram that failed (`he_pi0` 45 MeV parent theta), and
+  3. has no bound violation.
+- No further repeats are allowed under the rule; the stock sampler runs on the same new seeds as a control.
+- **Result: all three conditions hold.** The rerun passes V1 (max |pull| 1.51, chi2 p 0.71) and V2 (KS 1.00, min p
+  0.0082 for `he_pi0` 45 MeV parent momentum, tails 2.24). The failed histogram has p = 0.019, and there were no
+  bound violations. **The envelope is validated.** The control passes too.
+
+The failed histogram, parent theta at `he_pi0` 45 MeV, gives p = 0.20 (stock sampler, original seeds), 5.6e-5
+(envelope, first run), 0.019 (envelope, new seeds) and 0.023 (stock sampler, new seeds). The stock reference sample
+is the same in every run, so p-values of one histogram are correlated across port runs. A reference that sits a
+little off in this histogram, plus one unlucky port run, accounts for the first failure. Both envelope runs stay on
+record.
 
 ## Reproducibility
 
@@ -177,7 +202,7 @@ instead of one bar (see `gpu/src/bdnmc_jax/parents.py`). It draws different rand
 
 ## Unit tests
 
-`python -m pytest` in `gpu/` (42 tests; 51-68 s on L1, about 2 min on G1, where compilation dominates):
+`python -m pytest` in `gpu/` (about 2 min on G1, where compilation dominates):
 - **Parser:** stock quirks.
 - **Geometry:** sphere and cuboid path lengths against analytic results.
 - **Physics:**
@@ -197,8 +222,17 @@ instead of one bar (see `gpu/src/bdnmc_jax/parents.py`). It draws different rand
   - theta* against xR;
   - envelope against stock law (KS);
   - bound violations reported.
+- **Output:**
+  - number formatting matches stock's 10-digit lines token for token;
+  - event structure (`Run`, `event N`, 5 or 8 particle lines, `endevent N`, ` Summary`);
+  - the text reads back through the same parser used on stock event files, giving the accepted rows;
+  - each DM's interaction point lies between its detector entry and exit;
+  - weighted output writes one DM per event;
+  - HDF5 weights sum to the predicted signal in both modes.
+
+48 tests in all (67 s on L1).
 
 ## Not validated yet
 
 eta decay, `proton_brem`, off-shell decays, `particle_list` production, cylinder detectors, timing cuts,
-`dist_mod`, signal channels other than `NCE_electron`, models other than `Dark_Photon`, and event-file output.
+`dist_mod`, signal channels other than `NCE_electron`, and models other than `Dark_Photon`.

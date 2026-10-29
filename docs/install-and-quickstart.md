@@ -77,7 +77,7 @@ All of them, with the pitfalls of the card format, are in [parameter-card.md](pa
 ```bash
 cd gpu
 python3 -m venv .venv
-.venv/bin/python -m pip install -e '.[test]'                # CPU: jax, numpy, pytest, scipy
+.venv/bin/python -m pip install -e '.[test]'                # CPU: jax, numpy, pytest, scipy, h5py
 .venv/bin/python -m pip install 'jax[cuda12]==0.12.0.1'      # NVIDIA GPU: adds the CUDA plugin and libraries
 .venv/bin/python -c 'import jax; print(jax.default_backend(), jax.devices())'
 .venv/bin/python -m pytest -q
@@ -105,6 +105,36 @@ Predicted number of signal events (unweighted, two-pass) = 190.107
 For comparison, stock gives 190.82 ± 0.28 (weighted) for this card. `--save out.npz` keeps the pass-1 candidates:
 every DM that reached the detector, with its scatter probability, recoil electron, recoil DM, vertex, parent and
 mediator.
+
+**Event output:**
+
+```bash
+.venv/bin/python examples/quickstart.py phase0/cards/ref/mb_pi0_m005.dat --trials 1048576 \
+    --text events.dat --summary summary.dat --hdf5 events.h5 [--weighted]
+```
+
+- **`--text`:** stock's comprehensive event format, the same lines as stock's `output_file`.
+  - Layout: `Run`; then per event `event N`, the `pion`, `V`, `DM`, `Recoil_DM` and `electron` lines with stock's
+    17 fields at 10 significant digits, and `endevent N`; then the ` Summary` line.
+  - Tools that read stock event files read it unchanged.
+- **`--summary`:** appends stock's three summary lines.
+- **`--hdf5`:** one row per accepted DM in group `accepted`.
+  - Arrays: `event`, `weight`, `prob`, `dm`, `electron`, `recoil_dm`, `vertex`, `parent`, `mediator` (four-vectors
+    E, px, py, pz; vertex x, y, z, t), `L`, `crossing`, `block`, `trial`, `slot`.
+  - Attributes: the card text, the seed and the predictions.
+  - `weight` sums to the predicted number of signal events. HDF5 is the fast format; text is 10-100x slower per
+    event to write (13x on a laptop core, about 120x on the GPU node).
+- **`--weighted`:** writes every DM that reached the detector and passed the angle cuts, with its weight, instead of
+  the unweighted (accepted) sample.
+
+Differences from stock's files:
+- the Summary line's last number is the number of events written, not the card's `samplesize` (the port runs a
+  fixed number of trials);
+- weighted text output writes one DM per event, with that DM's scatter probability on the `event` line. Stock writes
+  one weight per event, the last DM's, which misstates events with two DM.
+
+From Python: `bdnmc_jax.output.write_text(res, path, summary_path=None)` and `write_hdf5(res, path)`, where `res`
+is `pipeline.finish(candidates, weighted=...)`.
 
 **From Python:**
 
@@ -136,7 +166,8 @@ electrons = c["electron"][res["accepted_mask"]]
 | `detector` | `sphere`, `cuboid` (rotations included) |
 | `timing_cut` | must be 0 (unset) |
 | used as in stock | `epsilon`, `alpha_D`, `dark_matter_mass`, `dark_photon_mass`, `POT`, `pi0_per_POT`, `meson_per_pi0`, `beam_energy`, `p_num_target` + `n_num_target` (BMPT target A), materials, `min/max_scatter_energy`, `min/max_scatter_angle`, `efficiency`, `seed` |
-| ignored | `samplesize`, `max_trials`, `burn_max`, `burn_timeout`, `repeat_count`, `run`, `output_file`, `summary_file`, `output_mode` (the trial count is an argument; nothing is written unless asked) |
+| ignored | `samplesize`, `max_trials`, `burn_max`, `burn_timeout`, `repeat_count`, `output_file`, `summary_file`, `output_mode` (the trial count is an argument; files are written only where asked) |
+| `run` | used as the run name in text output (default: the current Unix time, as in stock) |
 | `weighted` | not needed: the port always returns both the weighted and the two-pass unweighted prediction |
 
 Anything else raises `NotImplementedError` rather than running with a silent difference.

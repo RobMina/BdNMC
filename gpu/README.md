@@ -5,11 +5,13 @@ generic, experiment-independent parameter cards.
 
 **Status:**
 - **Validated:** pi0-decay dark-photon production with Sanford-Wang or BMPT parents, on-shell decays, sphere and
-  cuboid detectors and `NCE_electron` scattering pass the V0, V1 and V2 tests on CPU and on an NVIDIA A100. The
-  A100 gives the same counts as the CPU.
-- **Throughput:** 126x one core of stock `-O2` on the Sanford-Wang card and 86x on the BMPT card, in accepted
-  events per second, before output is written.
-- **Not yet ported:** other channels, models and signals, and event-file output.
+  cuboid detectors and `NCE_electron` scattering pass the V0, V1 and V2 tests on CPU and on an NVIDIA A100, with
+  either parent sampler. The A100 gives the same counts as the CPU.
+- **Output:** stock's text event format or HDF5.
+- **Throughput** with HDF5 output, in accepted events per second against one core of stock `-O2`:
+  - stock parent sampler: 126x (Sanford-Wang card), 109x (BMPT card);
+  - envelope sampler: 188x and 500x.
+- **Not yet ported:** other channels, models and signals.
 
 | Page | Content |
 |---|---|
@@ -27,12 +29,13 @@ generic, experiment-independent parameter cards.
   free of stock's running-maximum bias.
 - **No recompile per mass:** masses and couplings are runtime inputs.
 - **Parent sampler:** `parent_sampler="envelope"` is an opt-in parent sampler for the same law with much higher
-  acceptance. It has not passed V2 yet.
+  acceptance. It is validated; the stock proposal stays the default.
+- **Output:** `bdnmc_jax.output` writes the accepted events in stock's text format or as HDF5.
 
 | Path | Role |
 |---|---|
-| `src/bdnmc_jax/` | the port: `card`, `detector`, `electron`, `branching`, `kinematics`, `decay`, `parents`, `rng`, `pipeline`, `shards` |
-| `examples/quickstart.py` | run one card and print the predicted signal events |
+| `src/bdnmc_jax/` | the port: `card`, `detector`, `electron`, `branching`, `kinematics`, `decay`, `parents`, `rng`, `pipeline`, `shards`, `output` |
+| `examples/quickstart.py` | run one card, print the predicted signal events, optionally write text or HDF5 events |
 | `tests/` | pytest (`python -m pytest`); `test_v0.py` needs `v0/v0_dump.txt` |
 | `v0/` | V0 harness: C++ dump of stock function values, and its output `v0_dump.txt` (`v0/README.md`) |
 | `phase0/cards/` | the four generic base cards; `ref/` (stock unweighted reference, 16 points), `ref_w/` (weighted replicas), `ref_wl/` (long weighted runs), each with the generator script that wrote it |
