@@ -176,13 +176,13 @@ def main():
     chi2 = sum(p * p for p in pulls)
     v1 = {"max_abs_pull": max(abs(p) for p in pulls), "mean_pull": statistics.fmean(pulls),
           "chi2": chi2, "ndf": n, "chi2_p": float(stats.chi2.sf(chi2, n))}
-    v1["pass"] = (v1["max_abs_pull"] <= v1c["max_abs_pull_per_point"]
+    v1["pass"] = bool(v1["max_abs_pull"] <= v1c["max_abs_pull_per_point"]
                   and abs(v1["mean_pull"]) * math.sqrt(n) <= v1c["max_abs_mean_pull_times_sqrt_n"]
                   and v1["chi2_p"] >= v1c["min_chi2_p_value_over_points"])
     ks = stats.kstest(pvals, "uniform").pvalue if pvals else 0.0
     v2 = {"n_tests": len(pvals), "n_failed_closed": len(fails), "failed_closed": fails, "ks_uniform_p": float(ks),
           "min_p": float(min(pvals)) if pvals else None, "max_abs_tail_pull": max(abs(t) for t in tails)}
-    v2["pass"] = (not fails and ks > v2c["pass_ks_uniform_p_min"] and v2["min_p"] > v2c["pass_min_single_p"]
+    v2["pass"] = bool(not fails and ks > v2c["pass_ks_uniform_p_min"] and v2["min_p"] > v2c["pass_min_single_p"]
                   and v2["max_abs_tail_pull"] <= v2c["tails"]["max_abs_pull"])
     out |= {"V1": v1, "V2": v2}
     args.json.write_text(json.dumps(out, indent=1, default=lambda o: o.item()))  # numpy scalars
