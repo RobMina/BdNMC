@@ -40,13 +40,15 @@ parameter cards and is validated statistically against this code.
 
 **Implemented and validated:**
 - pi0 decay with Sanford-Wang or BMPT production;
+- proton bremsstrahlung (`V_decay` with `proton_brem`);
 - sphere and cuboid detectors;
 - `NCE_electron` scattering.
 
 **Output:** stock's text event format or HDF5.
 
-**Throughput:** on one NVIDIA A100, with HDF5 output, 109-500x one core of an optimised stock build, depending on
-the card and the parent sampler. See [gpu/README.md](gpu/README.md).
+**Throughput:** on one NVIDIA A100, with HDF5 output, 109-500x one core of an optimised stock build on the pi0
+cards, depending on the card and the parent sampler (the brem cards are not benchmarked yet). See
+[gpu/README.md](gpu/README.md).
 
 ## Layout
 

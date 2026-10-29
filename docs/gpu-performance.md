@@ -11,8 +11,8 @@ separately.
 - stock sampler: 126x on `mb_pi0`, 109x on `he_pi0`;
 - envelope sampler: 188x on `mb_pi0`, 500x on `he_pi0`.
 
-Not yet the full P1: the brem cards are not ported, the stock baseline is a laptop core rather than a core of the
-GPU node, and the MIG and whole-node figures are not measured.
+Not yet the full P1: the brem cards are ported and validated but not yet benchmarked on the GPU, the stock
+baseline is a laptop core rather than a core of the GPU node, and the MIG and whole-node figures are not measured.
 
 ## Stock BdNMC (L1, one core)
 
@@ -90,6 +90,13 @@ row per DM, about 260 bytes), the write timed and included; 1.34e8 trials per po
 The envelope configuration has since passed V1 and V2 (pre-declared repeat, [gpu-validation.md](gpu-validation.md#the-envelope-sampler)).
 The P1 figures are the ones with output in the table above.
 
+### Proton brem, commit `9127b57` (first figures, not a benchmark)
+
+- **L1, one core:** `he_brem_cuboid` runs at 0.32 M trials/s, 27.3 k accepted/s without output: 3.1x one core of
+  stock `-O2`.
+- **G1:** only the V1/V2 run so far, at about 25 s wall per 5e6-trial shard including compilation (one process
+  per shard). `bench.py` with HDF5 output on the brem cards is still to run.
+
 ## Where the time goes
 
 `gpu/validation/profile_port.py` times the parent sampler alone against the whole pass-1 block:
@@ -106,6 +113,10 @@ The P1 figures are the ones with output in the table above.
 At small batches the two timings come from separately compiled programs, so a share near or above 100 % means
 "almost all".
 
+Proton brem (stock sampler, L1, batch 1): the parent sampler is 93-97 % of the block, with 8 proposals per
+accepted V on `mb_brem` and 97 on `he_brem_cuboid`, whose density peaks sharply inside a wide (z, pT) window. An
+envelope for brem would cut this as it did for pi0.
+
 With the stock samplers the parent rejection loop is the whole cost. With the envelope it falls to about half on
 the GPU at large batches, and the host side (transfer of candidates, checks, concatenation) becomes the next cost:
 18-36 % of the end-to-end time on `mb_pi0` and 41-58 % on `he_pi0` at batches 16-256 (device-only against
@@ -115,7 +126,7 @@ end-to-end), against 17-23 % with the stock sampler at batch 64.
 
 - A stock baseline on a core of the GPU node itself, and the whole-node comparison.
 - A MIG slice.
-- The brem cards (not ported).
+- The brem cards on the GPU (`bench.py`, with HDF5 output).
 - P2 (a 20-mass x all-channel grid in one GPU-hour): masses are already runtime inputs, so a mass scan reuses the
   compiled kernel, but the grid itself has not been run.
 

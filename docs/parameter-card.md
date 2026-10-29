@@ -249,6 +249,16 @@ Defaults are set at `Parameter.cpp:150-169`.
 With `signal_channel Signal_Decay`, only `pi0_decay` and `eta_decay` (on-shell A' gamma), or any channel with
 `production_distribution proton_brem`, are accepted (`Kinetic_Mixing.cpp:87-131`).
 
+What the Dark_Photon brem channel does with `ptmin`/`ptmax`/`zmin`/`zmax` (found while porting it):
+- `d2N_proton_brem_to_V(z, pt2)` is called with pT in its pT^2 argument, by both the rate integral
+  (`V_prod_rate`, Simpson cubature over [`zmin`, `zmax`] x [`ptmin`, `ptmax`]) and the sampler. The sampler draws
+  pT in [`ptmin`, `ptmax`] and uses it as pT in the V's momentum, but the density it weights by is evaluated as if
+  that value were pT^2.
+- The DM count has no V -> chi chi branching ratio.
+- Each event's V decays to two DM; the second is tested only if the first misses the detector, so an event has at
+  most one DM in it.
+- The channel name in the event file is `Dark_Bremsstrahlung`.
+
 **Axion_Dark_Photon** (`Axion_Dark_Photon.cpp:164-275`):
 - `pi0_decay`, `eta_decay`: meson -> gamma a A';
 - `brem_dp`, `brem_axion`: `POT` x `num_per_pot`;

@@ -159,9 +159,12 @@ electrons = c["electron"][res["accepted_mask"]]
 | Card setting | Port |
 |---|---|
 | `model` | `Dark_Photon` (and `Dark_Photon_DM`) |
-| `production_channel` | exactly one `pi0_decay` block, without `dist_mod` |
-| `production_distribution` | `pi0_sanfordwang` (built-in parameters, no `sanfordwang_file`/`distribution_parameter_file`) or `bmpt` (no `max_meson_momentum`) |
-| masses | 2 m_chi <= m_pi0, and stock must take its on-shell `DecayDM` path: the total pi0 -> gamma chi chi branching ratio within 1.3x of pi0 -> gamma V x V -> chi chi, or 2 m_chi <= m_V < m_pi0 with 2 m_chi >= 0.97 m_V |
+| `production_channel` | exactly one block, without `dist_mod`: `pi0_decay`, or `V_decay` (also `Brem_V`) with `production_distribution proton_brem` |
+| `production_distribution` | for `pi0_decay`: `pi0_sanfordwang` (built-in parameters, no `sanfordwang_file`/`distribution_parameter_file`) or `bmpt` (no `max_meson_momentum`); for `V_decay`: `proton_brem` |
+| masses, `pi0_decay` | 2 m_chi <= m_pi0, and stock must take its on-shell `DecayDM` path: the total pi0 -> gamma chi chi branching ratio within 1.3x of pi0 -> gamma V x V -> chi chi, or 2 m_chi <= m_V < m_pi0 with 2 m_chi >= 0.97 m_V |
+| masses, `proton_brem` | 2 m_chi < m_V |
+| `proton_brem` window | `zmin`, `zmax`, `ptmax` (and `ptmin`, default 0) in the channel block, with 0 <= `zmin` <= `zmax` and `ptmin` <= `ptmax`; otherwise an error (stock continues with a zero-rate channel) |
+| `parent_sampler` (port option) | `"envelope"` works for `pi0_decay` only |
 | `signal_channel` | `NCE_electron` |
 | `detector` | `sphere`, `cuboid` (rotations included) |
 | `timing_cut` | must be 0 (unset) |
@@ -184,4 +187,5 @@ Each validation step and its tools are in [gpu-validation.md](gpu-validation.md)
 - **Stock side:** build stock at `-O2` into `gpu/stock/O2/` (`gpu/phase0/run_stock.sh` expects it there), generate
   the reference cards with the `phase0/make_*_cards.py` scripts, run them with `run_stock.sh`, and extract the
   electrons with `validation/extract_stock.py`.
-- **Port side and comparison:** run `validation/run_v_set.sh`, then `validation/compare_v.py`.
+- **Port side and comparison:** run `validation/run_v_set.sh`, then `validation/compare_v.py`. For the brem points:
+  `V_SET=brem validation/run_v_set.sh`, then `compare_v.py --config validation/v_config_brem.json`.
