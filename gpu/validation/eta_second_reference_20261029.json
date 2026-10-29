@@ -10,7 +10,7 @@
  },
  "second_reference": {
   "cards": "phase0/cards/ref_r2/{mb_eta_m005,he_eta_cuboid_m005}.dat (make_ref_repeat_cards.py): ref cards with seed + 1000000, same samplesize and max_trials",
-  "build": "stock -O2, as the first reference",
+  "build": "stock -O2, as the first reference (superseded by the amendment below)",
   "electrons": "validation/out/stock_r2/<stem>.npz (extract_stock.py)"
  },
  "tests": {
@@ -27,5 +27,11 @@
    "inconclusive": "reported as such; both references are kept on record"
   },
   "reporting": "the result of A and B and the verdict go into docs/gpu-validation.md whatever the outcome"
+ },
+ "amendment_2026-10-29": {
+  "change": "the second reference is run on a UVA CPU node with a Linux build of the same source (fork commit bf45d75, BdNMC_LANL c858395, no local changes; gcc 14.2.0, built -O2 -fPIC by the user), not with the laptop build",
+  "why": "time: two single-core jobs start at once there; the laptop mb_eta_m005 run was at 12 % after 7 minutes",
+  "laptop_runs": "the laptop runs of the two cards started at 17:01 were stopped at 17:09, unfinished; none of their results were read (only their event counts, for progress) and they are not used",
+  "effect": "a different compiler and standard library may give different events at the same seed; the sampled law is the same, so this is still an independent stock reference. If A shows a difference, the build is a possible cause and is reported as such. Tests and rule unchanged."
  }
 }
