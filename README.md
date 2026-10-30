@@ -39,7 +39,9 @@ The makefile sets no optimisation flag. For a faster build, see
 parameter cards and is validated statistically against this code.
 
 **Implemented and validated:**
-- pi0 decay with Sanford-Wang or BMPT production;
+- pi0 and eta decay with Sanford-Wang or BMPT production, on-shell and off-shell (off-shell validated for pi0);
+- meson decay from a `particle_list` (normalisation and decay products validated; see
+  [docs/gpu-validation.md](docs/gpu-validation.md#particle_list) for the parent histograms);
 - proton bremsstrahlung (`V_decay` with `proton_brem`);
 - sphere and cuboid detectors;
 - `NCE_electron` scattering.

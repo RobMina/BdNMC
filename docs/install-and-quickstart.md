@@ -159,12 +159,13 @@ electrons = c["electron"][res["accepted_mask"]]
 | Card setting | Port |
 |---|---|
 | `model` | `Dark_Photon` (and `Dark_Photon_DM`) |
-| `production_channel` | exactly one block, without `dist_mod`: `pi0_decay`, or `V_decay` (also `Brem_V`) with `production_distribution proton_brem` |
-| `production_distribution` | for `pi0_decay`: `pi0_sanfordwang` (built-in parameters, no `sanfordwang_file`/`distribution_parameter_file`) or `bmpt` (no `max_meson_momentum`); for `V_decay`: `proton_brem` |
-| masses, `pi0_decay` | 2 m_chi <= m_pi0, and stock must take its on-shell `DecayDM` path: the total pi0 -> gamma chi chi branching ratio within 1.3x of pi0 -> gamma V x V -> chi chi, or 2 m_chi <= m_V < m_pi0 with 2 m_chi >= 0.97 m_V |
+| `production_channel` | exactly one block, without `dist_mod`: `pi0_decay`, `eta_decay`, or `V_decay` (also `Brem_V`) with `production_distribution proton_brem` |
+| `production_distribution` | for `pi0_decay`: `pi0_sanfordwang` (built-in parameters, no `sanfordwang_file`/`distribution_parameter_file`) or `bmpt` (no `max_meson_momentum`); for `eta_decay`: `k0_sanfordwang` or `bpmt_k0`, with the same limits; for either meson: `particle_list` (with `particle_list_file`, optionally `particle_list_position true`); for `V_decay`: `proton_brem` |
+| `particle_list` file | as stock reads it (E ignored, rows reused from the top), but lines stock would skip or misread raise an error: fewer than four fields, an empty field, zero momentum with positions, an empty file. A relative path is opened from the working directory, as in stock |
+| masses, meson decays | 2 m_chi < m_meson. Stock's choice between the on-shell `DecayDM` and the off-shell `DecayDM_Off_Shell` (meson -> gamma V* -> gamma chi chi) is reproduced: off-shell when the total branching ratio exceeds 1.3x the on-shell one, except when 2 m_chi <= m_V < m_meson with 2 m_chi >= 0.97 m_V |
 | masses, `proton_brem` | 2 m_chi < m_V |
 | `proton_brem` window | `zmin`, `zmax`, `ptmax` (and `ptmin`, default 0) in the channel block, with 0 <= `zmin` <= `zmax` and `ptmin` <= `ptmax`; otherwise an error (stock continues with a zero-rate channel) |
-| `parent_sampler` (port option) | `"envelope"` works for `pi0_decay` only |
+| `parent_sampler` (port option) | `"envelope"` works for the analytic meson distributions (validated for pi0 and on-shell eta; not run with off-shell decays); refused for `particle_list` and `proton_brem` |
 | `signal_channel` | `NCE_electron` |
 | `detector` | `sphere`, `cuboid` (rotations included) |
 | `timing_cut` | must be 0 (unset) |
@@ -187,5 +188,9 @@ Each validation step and its tools are in [gpu-validation.md](gpu-validation.md)
 - **Stock side:** build stock at `-O2` into `gpu/stock/O2/` (`gpu/phase0/run_stock.sh` expects it there), generate
   the reference cards with the `phase0/make_*_cards.py` scripts, run them with `run_stock.sh`, and extract the
   electrons with `validation/extract_stock.py`.
-- **Port side and comparison:** run `validation/run_v_set.sh`, then `validation/compare_v.py`. For the brem points:
-  `V_SET=brem validation/run_v_set.sh`, then `compare_v.py --config validation/v_config_brem.json`.
+- **Port side and comparison:** run `validation/run_v_set.sh`, then `validation/compare_v.py`. For the other point
+  sets: `V_SET=<set> validation/run_v_set.sh`, then `compare_v.py --config validation/v_config_<set>.json`, with
+  `<set>` one of `brem`, `eta`, `list`, `offshell`. The list points need the lists from `phase0/make_lists.py`.
+- **Split references:** `phase0/make_split_ref_cards.py` writes a reference point as parallel parts;
+  `validation/merge_stock_parts.py` joins their electrons, and a config's `stock_runs` tells `compare_v.py` where the
+  parts are.

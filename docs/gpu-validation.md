@@ -4,14 +4,21 @@ How the JAX port in [`gpu/`](../gpu) is checked against stock BdNMC, and the res
 G1 A100 node) are described in [test-environments.md](test-environments.md); throughput is in
 [gpu-performance.md](gpu-performance.md).
 
-**Status (2026-10-29).** Scope: pi0 decay with Sanford-Wang or BMPT production, on-shell `DecayDM`, and proton
-bremsstrahlung (`V_decay` with `proton_brem`); sphere and cuboid detectors; `NCE_electron`.
+**Status (2026-10-30).** Scope: pi0 and eta decay with Sanford-Wang or BMPT production or a particle list, on-shell
+`DecayDM` and off-shell `DecayDM_Off_Shell`, and proton bremsstrahlung (`V_decay` with `proton_brem`); sphere and
+cuboid detectors; `NCE_electron`.
 - **pi0, `parent_sampler="stock"`** (the default) passes V0, V1 and V2 on CPU (L1) and on an A100 (G1).
 - **pi0, `parent_sampler="envelope"`** is validated on G1 under a pre-declared repeat rule, after failing V2 once
   (see [below](#the-envelope-sampler)).
 - **Proton brem** (stock sampler only) passes V0 on L1, and V1 and V2 on G1 at the first attempt
   ([below](#proton-bremsstrahlung)).
-- **Not validated yet:** eta, off-shell decays, other detectors or signals.
+- **eta** passes V0, and V1 and V2 on G1 with both parent samplers ([below](#eta-decay)). The envelope sampler's
+  pre-declared repeat missed one of its conditions; on review the envelope was accepted for eta anyway.
+- **`particle_list`** passes V1 on G1. V2 fails, only on the parent histograms, which the port and stock draw from
+  the same finite list ([below](#particle_list)).
+- **Off-shell pi0 decay** (stock sampler) passes V1 and V2 on G1 at the first attempt ([below](#off-shell-decays)).
+  Its V0 entries are in the harness but not built yet.
+- **Not validated yet:** other detectors, signals and models ([list](#not-validated-yet)).
 - **Event output** (text and HDF5) is tested for format and content ([Unit tests](#unit-tests)); it does not change
   the physics.
 
@@ -46,6 +53,18 @@ Validation uses generic, experiment-independent cards only (no experiment's meso
   | `he_brem_cuboid` | 120 GeV | `V_decay`, `proton_brem` (z 0.1-0.9, pT < 1 GeV) | as `he_pi0_cuboid` |
 
 - Each base card at m_chi = 1, 5, 20 and 45 MeV gives 16 reference points (`phase0/make_ref_cards.py`).
+- Six more base cards, added with their channels, each at the same four masses:
+
+  | Card | Made from | Change |
+  |---|---|---|
+  | `mb_eta` | `mb_pi0` | `eta_decay`, `k0_sanfordwang`, `meson_per_pi0` 1/30 |
+  | `he_eta_cuboid` | `he_pi0_cuboid` | `eta_decay`, `bpmt_k0`, `meson_per_pi0` 1/30 |
+  | `mb_list` | `mb_pi0` | `production_distribution particle_list`, `particle_list_position true` (`phase0/make_lists.py`) |
+  | `he_list_cuboid` | `he_pi0_cuboid` | as `mb_list` |
+  | `mb_offshell` | `mb_pi0` | m_V = 200 MeV, above m_pi0, so pi0 -> gamma V* -> gamma chi chi at every m_chi (`phase0/make_offshell_cards.py`) |
+  | `he_offshell_cuboid` | `he_pi0_cuboid` | as `mb_offshell` |
+
+  Each has its own seed.
 
 ### Stock reference sets
 
@@ -54,9 +73,18 @@ Validation uses generic, experiment-independent cards only (no experiment's meso
 | unweighted (`ref`) | one run per point: about 1e6 recoil electrons for the pi0 points, 2e7 trials for brem; event files in comprehensive mode | `phase0/make_ref_cards.py` |
 | weighted (`ref_w`) | `weighted true`, 8 independent-seed replicas per point; 5e8 / 4e7 / 2e7 / 2e7 trials per point in all for `mb_pi0` / `he_pi0` / `mb_brem` / `he_brem` | `phase0/make_weighted_cards.py` |
 | long weighted (`ref_wl`) | `he_pi0` only: one weighted run of 8.6e7 trials per mass, as long as the unweighted run | `phase0/make_long_weighted_cards.py` |
+| repeat (`ref_r2`) | `mb_eta` and `he_eta_cuboid` at 5 MeV: the `ref` cards with seed + 1,000,000 | `phase0/make_ref_repeat_cards.py` |
+| split unweighted (`ref_s`) | off-shell points: each `ref` card as N parts with their own seeds, samplesize / N events and max_trials / N (`mb_offshell` 40 x 25,000, `he_offshell_cuboid` 10 x 100,000) | `phase0/make_split_ref_cards.py` |
 
 Stock's weighted mode is the main V1 reference. Its unweighted prediction is biased (next section). The weighted
 error is the spread of the replicas.
+
+The pi0, brem, eta and list references ran on L1 (stock `-O2`), one run per point. The eta repeat ran on C1 with
+the node's gcc build, and the off-shell references on C1 with the container build
+([test-environments.md](test-environments.md)): 264 single-core runs (40 x 4 + 10 x 4 parts, plus the 64 weighted
+replicas) started at once and took 2-7 min each. For split references, `validation/merge_stock_parts.py` joins the
+parts' electrons for V2, and `compare_v.py` combines the parts' logs for V1 (trial-weighted mean of their `se`; sigma
+= `se` / sqrt(accepted events of all parts)).
 
 ### Stock behaviours that matter for the comparison
 
@@ -91,6 +119,16 @@ Measured on the reference sets (`phase0/bias_weighted.py`, `phase0/compare_long_
     - `V_decay_gen` tests the first DM and counts the second only if the first misses the detector (a
       short-circuit `||`), so a brem event has at most one DM in the detector.
     - Brem events have no meson line: V, DM, recoil DM, electron.
+  - `particle_list`: the file's E column is read but ignored (E is recomputed from the meson mass), and the rows are
+    reused from the top when the list runs out. The port maps trial i to row i mod N.
+  - Off-shell decays:
+    - stock uses `DecayDM_Off_Shell` when the off-shell branching ratio exceeds 1.3x the on-shell one, except when
+      2 m_chi <= m_V < m_meson and 2 m_chi >= 0.97 m_V;
+    - it builds the V* along +z and turns it with `Rotate_z(mtheta)` then `Rotate_y(mphi)`. The first rotation
+      leaves a z vector unchanged, so the V* direction is uniform in angle within the x-z plane, not isotropic.
+- **`max_trials` wraps.** It is a `long long` in `Parameter` but an `int` in the event loop, so 5e9 becomes
+  705,032,704 and values from 2^31 to 2^32 - 1 become negative, which means no limit. The `mb_eta` unweighted
+  references stop at 705,032,704 trials (about 2.3e5 electrons per point instead of 1e6).
 
 The port differs from stock where batching needs it:
 - it unweights against the global maximum of the whole run (two passes), so its unweighted `se` is unbiased;
@@ -101,17 +139,25 @@ The port differs from stock where batching needs it:
   generic brem cards that starting value is the window maximum (a unit test checks it), so stock's brem sampler
   never clips and the two sample the same law;
 - an invalid brem window (z or pT bounds out of order, negative z) raises an error; stock prints one and continues
-  with a zero-rate channel.
+  with a zero-rate channel;
+- the off-shell (s, theta) sampler has a fixed bar (a grid maximum x 1.02, with a fine grid around the V pole when it
+  is inside the window); stock's starts low and rises when exceeded;
+- `particle_list` refuses what stock would skip or misread: lines with fewer than four fields or an empty field, zero
+  momentum when positions are read, an empty file.
 
 ## V0: function values against the stock C++
 
-`gpu/v0/v0_dump.cpp` links the stock `-O2` library and prints 12,227 values at `%.17g`:
+`gpu/v0/v0_dump.cpp` links the stock `-O2` library and prints about 15,400 values at `%.17g`:
 - `EeTMax`, `EeTMin`, `sigma2`, `dsigmadEe`, `ThetaEe`;
 - `Ldet` for a sphere, a cuboid and a rotated cuboid (6,000 rays);
 - the pi0 branching ratios;
 - the Sanford-Wang density and the BMPT invariant cross section;
 - proton brem: `wpp` on a (z, pT^2, m_A) grid (1,323 points), `d2N` (726 points) and `V_prod_rate` for the two
-  generic brem windows at m_A = 0.02, 0.1 and 0.3 GeV.
+  generic brem windows at m_A = 0.02, 0.1 and 0.3 GeV;
+- eta: its two branching ratios, and the K0 laws used for eta (`sanfordwang_k0`, `bmpt_k0_ics`, 1,600 points each).
+
+The harness also has the off-shell entries (branching ratio and (s, theta) density for pi0 and eta, 5 regimes, 20 x
+10 points each). They are skipped until the harness is rebuilt.
 
 `tests/test_v0.py` compares the port with them.
 - **Tolerance:** (1e-12 + 64 eps x condition number) relative. The condition number covers cancellation (EeTMax at
@@ -120,16 +166,17 @@ The port differs from stock where batching needs it:
 - **`ThetaEe` endpoint:** rows at the recoil endpoint may be NaN or <= 3e-8 in either code.
 - **Brem tolerances:** `wpp` and `d2N` use the same rule, with a condition number that also covers sigma_pp(s')
   as s' cancels near z = 1. `V_prod_rate` (40,401 positive terms summed in a different order) is within 1e-10.
-- **Result:** passes on L1 and on G1. The brem entries were added later (harness rebuilt 2026-10-29) and have been
-  checked on L1 only; the pi0-era entries are unchanged.
+- **Result:** passes on L1 and on G1, with the brem and eta entries (harness rebuilt 2026-10-29). Dumps from three C1
+  builds also pass: the node gcc build, Intel icpx, and the container build
+  ([gpu-performance.md](gpu-performance.md#stock-bdnmc-on-a-linux-cluster-node-c1)).
 
 ## V1 and V2
 
 Thresholds and binning were frozen in `gpu/validation/v_config.json` before the first port-against-stock comparison
 (sha256 `7058b254019718dd6d98f269a6f212398abd7c57006f8b0e2e279aa971c0467a`, recorded in every result).
 
-- **Points:** the eight pi0 points (`mb_pi0` and `he_pi0_cuboid` at 1, 5, 20, 45 MeV); the eight brem points have
-  their own copy of the criteria ([below](#proton-bremsstrahlung)).
+- **Points:** the eight pi0 points (`mb_pi0` and `he_pi0_cuboid` at 1, 5, 20, 45 MeV). The brem, eta, list and
+  off-shell points each have their own copy of the criteria (sections below).
 - **Port runs:** 5e8 trials per `mb_pi0` point and 4e7 per `he_pi0` point, the reference card's seed, 4 block-range
   shards per point merged exactly (`validation/run_v_set.sh`).
 - **V1:**
@@ -242,13 +289,127 @@ Per point, V1:
 - **No proposal exceeded the fixed bar** at any point.
 - **Scope:** the envelope sampler is not ported for brem; `setup` refuses it.
 
+### Eta decay
+
+`gpu/validation/v_config_eta.json` (sha256 `38c688d1a72f38fb4be6263c03b67924fa9de46ade27c3718c82f68f6c6ef9b6`):
+criteria copied unchanged from `v_config.json`, frozen before the first eta comparison.
+- **Points:** `mb_eta` (`k0_sanfordwang`) and `he_eta_cuboid` (`bpmt_k0`) at 1, 5, 20, 45 MeV. The parent in V2 is
+  the eta.
+- **Port runs:** 5e8 trials per `mb_eta` point, 2e8 per `he_eta_cuboid` point (`V_SET=eta`).
+- **References:** the `mb_eta` unweighted references hold about 2.3e5 electrons per point, because stock's
+  `max_trials` wraps ([above](#stock-behaviours-that-matter-for-the-comparison)); the others hold about 1e6.
+- **Scope:** `eta_decay` with any other parent distribution (`bmpt`, `pi0_sanfordwang`, `proton_brem`) is refused.
+
+| Configuration | Env | Commit | V1: max \|pull\| / mean pull / chi2 p | V2: KS p / min p / max tail pull | Result |
+|---|---|---|---|---|---|
+| stock sampler, GPU | G1 | `69468ea` | 1.89 / -0.30 / 0.49 | 0.29 / 0.0074 / 2.91 | **pass** |
+| envelope sampler, GPU | G1 | `69468ea` | 2.48 / -0.13 / 0.12 | 0.24 / 0.0025 / 2.32 | **pass** |
+| envelope sampler, GPU, new seeds (pre-declared repeat) | G1 | `852a259` | 1.05 / -0.21 / 0.90 | 0.70 / 0.0053 / 2.18 | **pass**; the rule's condition 2 not met (below) |
+| stock sampler, GPU, new seeds (control) | G1 | `852a259` | 2.61 / -0.31 / 0.29 | 0.85 / 0.0040 / **3.09** | **fail** (tail pull > 3); a reference fluctuation (below) |
+
+Per point, stock sampler, first seeds, V1:
+
+| Point (1, 5, 20, 45 MeV) | Port / stock weighted - 1 | Pull |
+|---|---|---|
+| `mb_eta` | -0.14, -0.17, -0.46, +0.31 % | -0.56, -0.61, -1.89, +0.91 |
+| `he_eta_cuboid` | +0.07, -0.10, -0.03, +0.02 % | +0.94, -1.15, -0.26, +0.18 |
+
+Secondary: within 0.8 % of stock unweighted `se` at every point.
+
+**The envelope repeat (`gpu/validation/v_rerun_envelope_eta_20261029.json`, committed before the jobs ran).** The
+first envelope run passed, but 4 of its 112 p-values were below 0.01 (1.1 expected), all `theta_e` histograms at
+`mb_eta` 5 MeV. The rule: the envelope is validated for eta only if a run with new seeds
+1. passes every V1 and V2 criterion,
+2. gives p > 0.01 for each of those four histograms,
+3. has no bound violation, and
+4. a high-statistics parent check on both K0 laws gives p > 0.001 for every histogram, with no bound violation.
+
+Result: conditions 1, 3 and 4 hold. The parent check (`validation/compare_parent_samplers.py`, 1.34e8 parents per
+sampler) gives p = 0.83, 0.89, 0.048 for p, theta and pT on `k0_sanfordwang`, and 0.26, 0.61, 0.11, 0.65 for p,
+theta, pT and v on `bpmt_k0`. Condition 2 fails: `theta_e` in the lowest E_e slice at `mb_eta` 5 MeV has p = 0.0053.
+Under the rule the envelope is therefore **not validated for eta**. **On review, the envelope was accepted for eta
+anyway (2026-10-30)**, overriding the rule; this record keeps both.
+
+**Second stock reference (`gpu/validation/eta_second_reference_20261029.json`, declared before it ran).** The
+control's failure (`theta_e` tail pull -3.09 at `he_eta_cuboid` 5 MeV) and the low `theta_e|E_e_q0` p-values at
+`mb_eta` 5 MeV recur across independent port runs against the same stock sample, so a second stock reference was
+run at those two points (`ref_r2`, new seeds, on C1).
+- Test A, first reference against second (`validation/compare_stock_refs.py`): `he_eta_cuboid` 5 MeV `theta_e`
+  tail pull -2.10, so the first reference has more tail than the second.
+- Test B, the four port runs against the second reference (`compare_v.py --stock-dir validation/out/stock_r2`): the
+  `he_eta_cuboid` `theta_e` tail pulls are -0.26, +0.21, +0.34, -0.70 (mean -0.10), and `mb_eta` `theta_e|E_e_q0`
+  has p = 0.21, 0.68, 0.33, 0.32.
+- Verdict under the declared rule: **"reference"**. The control's V2 failure is a fluctuation of the first
+  reference, and the stock-sampler eta configuration stays validated on its first run.
+- The two stock references disagree at 6 of their 28 histograms at p < 0.05 (1.4 expected). They also differ in
+  build (L1 against C1), which may contribute; not checked further.
+
+### particle_list
+
+`gpu/validation/v_config_list.json` (sha256 `0f90e4a2...`): criteria copied unchanged from `v_config.json`, frozen
+before the first list comparison.
+- **Lists:** `phase0/make_lists.py` writes two synthetic lists of 1e6 pi0 each: Sanford-Wang parents at 8.9 GeV for
+  `mb_list`, BMPT parents at 120 GeV on carbon for `he_list_cuboid` (drawn with the port's envelope sampler, fixed
+  seed). Each row has a synthetic decay vertex (x, y Gaussian with sigma 0.2 m, z uniform in [0, 50] m, t = z / c),
+  so `particle_list_position` is exercised. The lists are not tracked; the script regenerates them and checks them
+  against the sha256 in `lists/MANIFEST.json`.
+- **Port runs:** 5e8 trials per `mb_list` point, 4e7 per `he_list_cuboid` point (`V_SET=list`).
+- **Parser:** `tests/data/plist_formats.dat` covers the separators and column counts stock accepts; the port's
+  parents and positions match stock's own echo of that file (`v0/plist_echo.sh`).
+
+| Configuration | Env | Commit | V1: max \|pull\| / mean pull / chi2 p | V2: KS p / min p / max tail pull | Result |
+|---|---|---|---|---|---|
+| GPU | G1 | `eeb7003` | 1.52 / +0.40 / 0.78 | **0.0054 / 4.8e-9** / 2.26 | V1 pass; **V2 fails** on two parent histograms |
+
+- **V1:** pulls +0.81, -0.13, -0.48, -0.46 (`mb_list`) and +0.81, +0.70, +1.52, +0.43 (`he_list_cuboid`); the port
+  is within 0.18 % of stock weighted `se` at every point.
+- **V2:** only two of 112 histograms have p < 0.01, both at `mb_list` 45 MeV: `parent_p` (3.3e-8) and `parent_theta`
+  (4.8e-9). They pull the KS test below 0.01. Every electron, DM and vertex histogram passes.
+- **Why the parent histograms fail:** both codes draw their parents from the same rows of the same list, so the two
+  samples share their inputs and the two-sample test does not apply to them. Every row is used many times (500 times
+  in the port's 5e8 trials, 1,200-2,000 times in stock's runs), so both samples are clumped on the same values.
+  Stock also writes the parent at 10 significant digits, which piles repeated values onto the equal-population bin
+  edges (`validation/diagnose_ties.py`). An amendment that would drop these two histograms for list points was
+  drafted but not declared, so this is recorded as a V2 fail confined to the shared inputs.
+
+### Off-shell decays
+
+`gpu/validation/v_config_offshell.json` (sha256 `b729ebda...` after its amendment): criteria copied unchanged from
+`v_config.json`, frozen before the first off-shell comparison and amended, still before it, for the reference runs
+(split parts, C1 container build).
+- **Points:** `mb_offshell` and `he_offshell_cuboid` at 1, 5, 20, 45 MeV (m_V = 200 MeV); stock sampler only.
+- **Port runs:** 5e8 trials per `mb_offshell` point, 4e7 per `he_offshell_cuboid` point (`V_SET=offshell`).
+- **References:** split unweighted references (`ref_s`) and 8 weighted replicas per point, all on C1
+  ([above](#stock-reference-sets)); 1.00-1.10e6 electrons per point.
+
+| Configuration | Env | Commit | V1: max \|pull\| / mean pull / chi2 p | V2: KS p / min p / max tail pull | Result |
+|---|---|---|---|---|---|
+| stock sampler, GPU | G1 | `c4ce8d5` | 1.94 / -0.18 / 0.51 | 0.91 / 0.016 / 2.04 | **pass** |
+
+Per point, V1:
+
+| Point (1, 5, 20, 45 MeV) | Port / stock weighted - 1 | Pull |
+|---|---|---|
+| `mb_offshell` | +0.04, +0.00, -0.30, +0.04 % | +0.20, +0.00, -1.94, +0.19 |
+| `he_offshell_cuboid` | -0.05, -0.26, +0.04, +0.22 % | -0.22, -1.22, +0.21, +1.35 |
+
+- **V2:** no histogram failed closed; 10 of 112 p-values are below 0.05 (5.6 expected), none below 0.01.
+- **Secondary:** the port is 0.7-1.4 % below stock unweighted `se`, outside max(1 %, 2 sigma) at three
+  `he_offshell` points. This is a larger running-pMax excess than the single-run references show (0.03-0.62 % at the
+  pi0 points; 0.2-0.3 % at three `he_list_cuboid` points, 1.27 % at the fourth). Each split part starts again from
+  a 1000-DM burn-in, so a larger share of the sample is drawn under a low pMax; the amendment noted the extra
+  burn-ins before the comparison. The secondary comparison is not a pass criterion.
+- **Unit tests** check the off-shell mode choice and `Vnum` against the stock logs, the sampler against its density,
+  and the decay kinematics, including stock's x-z-plane V* direction.
+
 ## Reproducibility
 
 - **Per seed:** results do not depend on the batch size (blocks per device call), the candidate cap or the split
   into shards; tests check this bit for bit on CPU. Each 2^16-trial block's random numbers depend only on (seed,
   channel, block).
 - **GPU against CPU:** with the stock sampler, the GPU runs give the same number of detector hits and accepted
-  events at all eight pi0 points as the CPU run, and `se` within 6e-14 relative. (Brem has run on G1 only.)
+  events at all eight pi0 points as the CPU run, and `se` within 6e-14 relative. (Brem, eta, `particle_list` and
+  off-shell have run on G1 only.)
   - Per candidate (64 blocks at two points), the candidate sets are identical and values agree within 3.6e-6
     relative (`prob`) and 2.8e-6 (`recoil_dm`, a difference of nearly equal momenta).
   - The two backends round transcendental functions differently, so this is not bit-identical.
@@ -292,10 +453,33 @@ Per point, V1:
   - one compile across masses;
   - text events start with the V line (no meson).
 
-64 tests in all, all passing on L1 (86 s). On G1 (3 min) they last ran before the harness rebuild, with
-`test_proton_brem` skipped.
+- **Eta:**
+  - branching ratio and `Vnum` against the stock logs;
+  - the K0 laws differ from the pi0 ones and keep stock's choices;
+  - eta kinematics, text output with the eta as parent;
+  - other parent distributions are refused.
+- **`particle_list`:**
+  - the parser against stock's echo of a test list, with and without positions;
+  - the refusals; rows cycling across blocks;
+  - a list of a sampler's parents reproduces that sampler's run bit for bit;
+  - positions move the decay vertex; an eta list uses the eta mass.
+- **Off-shell:**
+  - mode choice and `Vnum` against the stock logs, at several (m_V, m_chi) regimes;
+  - the (s, theta) sampler follows its density, and the bar covers a V pole inside the window;
+  - decay kinematics in the meson frame (with stock's x-z-plane V* direction) and momentum conservation in the lab;
+  - on-shell cards are unchanged.
+- **Split references:** the part cards differ from their reference card only in seed, samplesize and max_trials;
+  their seeds are unique; the merge and the combination of the parts' logs.
+
+106 tests in all: on L1, 105 pass and the off-shell V0 test is skipped (harness not rebuilt) (2 min). On G1, in the
+off-shell V-set job at `c4ce8d5`, 87 pass and 19 skip: those read stock run logs under `phase0/out`, which were not
+copied into that job's code tree.
 
 ## Not validated yet
 
-eta decay, the envelope sampler for `proton_brem`, off-shell decays, `particle_list` production, cylinder detectors, timing cuts,
-`dist_mod`, signal channels other than `NCE_electron`, and models other than `Dark_Photon`.
+- the off-shell V0 entries (in the harness, not built yet);
+- the envelope sampler with off-shell decays or with `particle_list` (not run), and for `proton_brem` (not ported);
+- off-shell eta decay in V1/V2 (only pi0 has reference points);
+- V2 of the parent histograms for `particle_list` (see [above](#particle_list));
+- cylinder detectors, timing cuts, `dist_mod`, signal channels other than `NCE_electron`, and models other than
+  `Dark_Photon`.

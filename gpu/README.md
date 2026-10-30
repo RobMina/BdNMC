@@ -9,13 +9,18 @@ generic, experiment-independent parameter cards.
   either parent sampler. The A100 gives the same counts as the CPU.
 - **Proton bremsstrahlung** (`V_decay` with `proton_brem`, stock parent sampler) passes V0 on CPU, and V1 and V2
   on an A100.
+- **eta decay** (`k0_sanfordwang`, `bpmt_k0`) passes V0, and V1 and V2 on an A100 with either parent sampler.
+- **Off-shell decays** (meson -> gamma V* -> gamma chi chi, stock sampler) pass V1 and V2 on an A100 for pi0; their
+  V0 entries wait for a harness rebuild.
+- **`particle_list`** passes V1 on an A100; V2 passes except for the parent histograms, whose inputs the port and
+  stock share ([docs](../docs/gpu-validation.md#particle_list)).
 - **Output:** stock's text event format or HDF5.
 - **Throughput** with HDF5 output, in accepted events per second against one core of stock `-O2`:
   - stock parent sampler: 126x (Sanford-Wang card), 109x (BMPT card);
   - envelope sampler: 188x and 500x.
   - brem (stock sampler): 140x on the 120 GeV card; 43x on the 8.9 GeV card, where writing the HDF5 file is 58 %
     of the run.
-- **Not yet ported:** eta and other channels, models and signals; the envelope sampler for brem.
+- **Not yet ported:** other channels, models and signals; the envelope sampler for brem.
 
 | Page | Content |
 |---|---|
@@ -38,15 +43,16 @@ generic, experiment-independent parameter cards.
 
 | Path | Role |
 |---|---|
-| `src/bdnmc_jax/` | the port: `card`, `detector`, `electron`, `branching`, `kinematics`, `decay`, `parents`, `brem`, `rng`, `pipeline`, `shards`, `output` |
+| `src/bdnmc_jax/` | the port: `card`, `detector`, `electron`, `branching`, `kinematics`, `decay`, `offshell`, `parents`, `particle_list`, `brem`, `rng`, `pipeline`, `shards`, `output` |
 | `examples/quickstart.py` | run one card, print the predicted signal events, optionally write text or HDF5 events |
 | `tests/` | pytest (`python -m pytest`); `test_v0.py` needs `v0/v0_dump.txt` |
 | `v0/` | V0 harness: C++ dump of stock function values, and its output `v0_dump.txt` (`v0/README.md`) |
-| `phase0/cards/` | the four generic base cards; `ref/` (stock unweighted reference, 16 points), `ref_w/` (weighted replicas), `ref_wl/` (long weighted runs), each with the generator script that wrote it |
+| `phase0/cards/` | the ten generic base cards; `ref/` (stock unweighted reference: 40 points, 38 cards, as the 5 MeV brem points reuse the base-card runs), `ref_w/` (weighted replicas), `ref_wl/` (long weighted runs), `ref_r2/` (repeat references), `ref_s/` (split references), each with the generator script that wrote it; `phase0/make_lists.py` writes the synthetic particle lists |
 | `phase0/run_stock.sh` | `run_stock.sh <build> <card-stem>`: one card through a stock build in `stock/<build>/` (not in the repo), outputs in `phase0/out/` |
 | `phase0/bias_weighted.py`, `phase0/compare_long_weighted.py` | stock unweighted against weighted `se` (running-pMax bias), and BMPT's run-length bias |
-| `validation/v_config.json`, `v_config_brem.json` | V1/V2 thresholds and binning for the pi0 and brem points, each frozen before its first port-against-stock comparison |
-| `validation/run_v_set.sh`, `run_port.py`, `extract_stock.py`, `compare_v.py` | V1 (normalisation) and V2 (distributions) of the port against the stock reference sets |
+| `validation/v_config*.json` | V1/V2 thresholds and binning for the pi0, brem, eta, list and off-shell points, each frozen before its first port-against-stock comparison; the pre-declared repeat and second-reference rules beside them |
+| `validation/run_v_set.sh`, `run_port.py`, `extract_stock.py`, `merge_stock_parts.py`, `compare_v.py` | V1 (normalisation) and V2 (distributions) of the port against the stock reference sets |
+| `validation/compare_stock_refs.py`, `diagnose_ties.py` | one stock reference against another; repeated values at bin edges |
 | `validation/check_shard_repro.py` | rerun blocks of a saved shard and compare (code changes, CPU against GPU) |
 | `validation/compare_parent_samplers.py` | high-statistics check of the envelope parent sampler against the stock proposal |
 | `validation/bench.py`, `validation/profile_port.py` | throughput (compile, steady state, device only) and where the time goes |
