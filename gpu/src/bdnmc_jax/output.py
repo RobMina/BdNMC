@@ -51,22 +51,13 @@ def accepted_events(res):
         return np.arange(len(res["event"])), res["event"]
     c = res["candidates"]
     idx = np.nonzero(res["accepted_mask"])[0]
-    order = idx[np.argsort(order_key(c["block"][idx], c["trial"][idx], c["slot"][idx]), kind="stable")]
-    return order, event_numbers(c["block"][order], c["trial"][order], res.get("weighted"))
-
-
-def order_key(block, trial, slot):
-    """(block, trial, slot) order as one key. Rows come in block order, two trial-sorted runs per block (DM 1, DM 2),
-    so a stable sort on it is fast."""
-    return (block.astype(np.int64) * rng.BLOCK + trial) * 2 + (slot >= rng.BLOCK)
-
-
-def event_numbers(block, trial, weighted):
-    """Event number per row of rows in output order: one event per trial (weighted: one per DM), from 1."""
-    if weighted:
-        return np.arange(1, len(block) + 1)
-    trial_id = block.astype(np.int64) * rng.BLOCK + trial
-    return np.cumsum(np.r_[True, trial_id[1:] != trial_id[:-1]]) if len(block) else np.zeros(0, int)
+    # (block, trial, slot) order as one key; rows come in block order, two trial-sorted runs per block (DM 1, DM 2)
+    key = (c["block"][idx].astype(np.int64) * rng.BLOCK + c["trial"][idx]) * 2 + (c["slot"][idx] >= rng.BLOCK)
+    order = idx[np.argsort(key, kind="stable")]
+    if res.get("weighted"):
+        return order, np.arange(1, len(order) + 1)
+    trial_id = c["block"][order].astype(np.int64) * rng.BLOCK + c["trial"][order]
+    return order, np.cumsum(np.r_[True, trial_id[1:] != trial_id[:-1]]) if len(order) else np.zeros(0, int)
 
 
 def row_weights(res, rows):
