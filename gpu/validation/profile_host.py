@@ -1,9 +1,10 @@
-"""Where the end-to-end time goes on the host for one card: pass 1 (`pipeline.candidates`), pass 2 (`finish`) and
-the HDF5 write, each timed after a warm-up call that compiles, with a cProfile table of the functions that take the
-time. The write is timed into each of --out-dirs (for example shared scratch against node-local disk), and the
+"""Where the end-to-end time goes on the host for one card: passes 1 and 2 (`finish(candidates(...))`, or with
+--events `pipeline.events`) and the HDF5 write, each timed after a warm-up call that compiles, with a cProfile table
+of the functions that take the time. The write is timed into each of --out-dirs (for example shared scratch against node-local disk), and the
 file is deleted afterwards. Also reports the bytes copied from the device per batch and written per accepted row.
 
-Usage: profile_host.py <card> <n_trials> [--batch 256] [--cap 16384] [--out-dirs D ...] [--top 25] [--json out.json]
+Usage: profile_host.py <card> <n_trials> [--batch 256] [--cap 16384] [--events] [--out-dirs D ...] [--top 25]
+       [--json out.json]
 """
 import argparse
 import cProfile
@@ -50,20 +51,23 @@ def main():
     ap.add_argument("--cap", type=int, default=16384)
     ap.add_argument("--out-dirs", type=Path, nargs="+", default=[Path("/tmp")])
     ap.add_argument("--top", type=int, default=25)
+    ap.add_argument("--events", action="store_true", help="profile pipeline.events, not finish(candidates(...))")
     ap.add_argument("--json", type=Path)
     args = ap.parse_args()
     kw = {"batch": args.batch, "cap": args.cap}
+    if args.events:
+        pass12 = lambda n: pipeline.events(args.card, n, **kw)  # noqa: E731
+    else:
+        pass12 = lambda n: pipeline.finish(pipeline.candidates(args.card, n, **kw))  # noqa: E731
     t = time.perf_counter()
-    pipeline.finish(pipeline.candidates(args.card, args.batch * rng.BLOCK, **kw))
+    pass12(args.batch * rng.BLOCK)
     rep = {"card": str(args.card), "n_trials": args.n_trials, "batch": args.batch, "cap": args.cap,
-           "device": jax.devices()[0].device_kind, "warm_s": time.perf_counter() - t}
+           "path": "events" if args.events else "candidates+finish", "device": jax.devices()[0].device_kind,
+           "warm_s": time.perf_counter() - t}
     total, per_key = batch_bytes(args.card, args.batch, args.cap)
     rep["device_get_bytes_per_batch"] = total
     rep["device_get_bytes_per_key"] = per_key
-    res, rep["candidates_s"], prof_c = profiled(lambda: pipeline.candidates(args.card, args.n_trials, **kw), args.top)
-    t = time.perf_counter()
-    res = pipeline.finish(res)
-    rep["finish_s"] = time.perf_counter() - t
+    res, rep["candidates_s"], prof_c = profiled(lambda: pass12(args.n_trials), args.top)
     t = time.perf_counter()
     rows, _ = output.accepted_events(res)
     rep["accepted_events_s"] = time.perf_counter() - t
@@ -77,8 +81,8 @@ def main():
         path.unlink()
         rep["write"].append({"dir": str(d), "write_s": dt, "bytes": size, "bytes_per_row": size / max(res["accepted"], 1)})
         print(f"==== write to {d}: {dt:.2f} s, {size / 1e9:.2f} GB, {size / max(res['accepted'], 1):.0f} B/row\n{prof_w}")
-    print(f"==== candidates {rep['candidates_s']:.2f} s ({res['n_hits']} candidates, "
-          f"{total / 1e9:.2f} GB from the device per batch of {args.batch})\n{prof_c}")
+    print(f"==== {rep['path']} {rep['candidates_s']:.2f} s ({res['n_hits']} candidates; a batch of {args.batch} "
+          f"holds {total / 1e9:.2f} GB on the device)\n{prof_c}")
     print(json.dumps({k: v for k, v in rep.items() if k != "device_get_bytes_per_key"}, indent=1))
     print("bytes per key per batch:", {k: f"{v / 1e6:.0f} MB" for k, v in per_key.items()})
     if args.json:
