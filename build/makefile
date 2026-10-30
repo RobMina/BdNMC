@@ -1,4 +1,4 @@
-CXXFLAGS = -std=c++14 -Wall -pedantic -Wunused-but-set-parameter 
+CXXFLAGS = -std=c++14 -O2 -Wall -pedantic -Wunused-but-set-parameter 
 
 VPATH = ../src:header:../BdNMC_LANL/src
 #:../src/cteq_pdf_reader

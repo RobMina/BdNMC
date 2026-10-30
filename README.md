@@ -1,9 +1,65 @@
 # BdNMC
 
-This code requires the BdNMC_LANL submodule. All submodules can be grabbed with "git submodule update --init --recursive".
+BdNMC is a Monte Carlo event generator for light dark matter produced in proton fixed-target experiments. It
+simulates meson decays, proton bremsstrahlung and parton-level production of a mediator, the propagation of dark
+matter to a detector, and its scattering there. Full documentation of the physics is in the appendix of
+[arXiv:1609.01770](http://arxiv.org/abs/1609.01770).
 
-Full documentation can be found in the appendix of http://arxiv.org/abs/1609.01770.
+## Quick start
 
-To run the code, execute ./bin/BDNMC \<filepath\> in the base BdNMC directory, where the filepath points to a valid parameter file. This will compile and run the code with the supplied parameter file. If no \<filepath\> is specified, it will use parameter.dat found in the base BdNMC directory.
+```bash
+git clone https://github.com/pgdeniverville/BdNMC.git
+cd BdNMC
+git submodule update --init --recursive   # BdNMC_LANL: required by the build
+./bin/BDNMC parameter.dat
+```
 
-A sample parameter file is included: paramater.dat.
+- **What `bin/BDNMC` does:** builds `build/main` with `make` if needed, then runs it on each parameter card given;
+  with no argument it uses `parameter.dat`.
+- **Card paths:** relative to the directory you run it from.
+- **Run directory:** BdNMC runs from the repository root, where it finds `data/`.
+- **Sample card:** `parameter.dat` is a commented example that ends with the result to expect.
+
+The makefile sets no optimisation flag. For a faster build, see
+[docs/install-and-quickstart.md](docs/install-and-quickstart.md#stock-bdnmc-c).
+
+## Documentation
+
+| Page | Content |
+|---|---|
+| [docs/install-and-quickstart.md](docs/install-and-quickstart.md) | building and running stock BdNMC; installing and running the GPU port |
+| [docs/parameter-card.md](docs/parameter-card.md) | every parameter-card option: keys, blocks, defaults, allowed values, parser behaviour |
+| [docs/gpu-validation.md](docs/gpu-validation.md) | how the GPU port is validated against stock BdNMC, and the results |
+| [docs/gpu-performance.md](docs/gpu-performance.md) | throughput of stock BdNMC and of the GPU port |
+| [docs/test-environments.md](docs/test-environments.md) | the hardware and software the tests ran on |
+
+## GPU port
+
+[`gpu/`](gpu) holds `bdnmc-jax`, a batched JAX port of part of BdNMC that runs on GPUs and CPUs. It reads the same
+parameter cards and is validated statistically against this code.
+
+**Implemented and validated:**
+- pi0 decay with Sanford-Wang or BMPT production;
+- proton bremsstrahlung (`V_decay` with `proton_brem`);
+- sphere and cuboid detectors;
+- `NCE_electron` scattering.
+
+**Output:** stock's text event format or HDF5.
+
+**Throughput:** on one NVIDIA A100, with HDF5 output, 109-500x one core of an optimised stock build on the pi0
+cards (depending on the card and the parent sampler), and 43-140x on the brem cards. See
+[gpu/README.md](gpu/README.md).
+
+## Layout
+
+| Path | Content |
+|---|---|
+| `src/` | BdNMC sources |
+| `BdNMC_LANL/` | submodule with the `DMNscattering` sources |
+| `build/makefile` | build of `build/main` |
+| `bin/BDNMC` | build-and-run script |
+| `data/` | tables read at run time (`rratio.dat`, `delta_production_form_factor.dat`), an example Sanford-Wang parameter file (`sanfordwang_parameters.dat`) and an example card that writes a Burman-Smith particle list (`bmpt_gen.dat`) |
+| `parameter.dat` | sample parameter card |
+| `Parameter_Card_Generator.py` | helper that writes and runs modified cards |
+| `docs/` | documentation |
+| `gpu/` | JAX port |
