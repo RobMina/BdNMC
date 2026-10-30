@@ -1,9 +1,11 @@
 """Throughput of pass 1 + pass 2 on one card: compile time, steady-state trials/s, candidates/s and accepted
 (unweighted, two-pass) events/s, for a grid of blocks-per-call batch sizes; and the device-only rate (no host
 transfer or checks) at each batch size. With --write hdf5 (goal P1's binary output) or --write text, writing the
-accepted events is timed and included in the end-to-end rate; the file is deleted afterwards.
+accepted events is timed and included in the end-to-end rate; the file is deleted afterwards. Runs that write use
+`pipeline.events` (accepted rows gathered on the device), unless --host-path asks for `finish(candidates(...))`.
 
-Usage: bench.py <card> <n_trials> [--batch 1 4 16] [--cap C] [--write none|hdf5|text] [--out-dir D] [--json out.json]
+Usage: bench.py <card> <n_trials> [--batch 1 4 16] [--cap C] [--write none|hdf5|text] [--host-path] [--out-dir D]
+       [--json out.json]
 """
 import argparse
 import json
@@ -41,20 +43,27 @@ def main():
     ap.add_argument("--parent-sampler", default="stock", choices=pipeline.PARENT_SAMPLERS)
     ap.add_argument("--write", choices=["none", "hdf5", "text"], default="none",
                     help="also write the accepted events (to --out-dir) and include the write in the end-to-end rate")
+    ap.add_argument("--host-path", action="store_true", help="write through finish(candidates(...)), not events()")
     ap.add_argument("--out-dir", type=Path, default=Path(tempfile.gettempdir()))
     ap.add_argument("--json", type=Path)
     args = ap.parse_args()
     kw = {"parent_sampler": args.parent_sampler}
+    device_path = args.write != "none" and not args.host_path
+
+    def generate(n, b, cap):
+        if device_path:
+            return pipeline.events(args.card, n, batch=b, cap=cap, **kw)
+        return pipeline.finish(pipeline.candidates(args.card, n, batch=b, cap=cap, **kw))
     out = {"card": str(args.card), "n_trials": args.n_trials, "parent_sampler": args.parent_sampler,
+           "path": "events" if device_path else "candidates+finish",
            "backend": jax.default_backend(),
            "device": jax.devices()[0].device_kind, "jax": jax.__version__, "runs": []}
     for b in args.batch:
         t = time.perf_counter()
-        warm = pipeline.candidates(args.card, b * rng.BLOCK, batch=b, cap=args.cap, **kw)  # compile, cap growth
+        cap = generate(b * rng.BLOCK, b, args.cap)["cap"]  # compile, cap growth
         t_warm = time.perf_counter() - t
-        cap = warm["cap"]
         t = time.perf_counter()
-        res = pipeline.finish(pipeline.candidates(args.card, args.n_trials, batch=b, cap=cap, **kw))
+        res = generate(args.n_trials, b, cap)
         t_gen = time.perf_counter() - t
         t_write, size = 0.0, 0
         if args.write != "none":

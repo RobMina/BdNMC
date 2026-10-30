@@ -1,6 +1,7 @@
 """Event output: stock BdNMC's comprehensive text format and summary line, and HDF5.
 
-Input is a pass-2 result (`pipeline.finish(candidates, weighted)`). Accepted DM are put in stock's event order:
+Input is a pass-2 result (`pipeline.finish(candidates, weighted)`, or `pipeline.events`, which returns the same
+events with only the accepted rows copied from the device). Accepted DM are put in stock's event order:
 trials in order, and within a trial the DM in slot order (stock's particle list holds the two DM in decay order and
 inserts each accepted DM's Recoil_DM and electron after it).
 
@@ -44,10 +45,15 @@ FORMAT = "bdnmc-jax-events/1"
 
 
 def accepted_events(res):
-    """(row indices into res["candidates"] in output order, event number per row, starting at 1)."""
+    """(row indices into res["candidates"] in output order, event number per row, starting at 1). A result of
+    `pipeline.events` already holds only the accepted rows, in output order."""
+    if res.get("output_order"):
+        return np.arange(len(res["event"])), res["event"]
     c = res["candidates"]
     idx = np.nonzero(res["accepted_mask"])[0]
-    order = idx[np.lexsort((c["slot"][idx], c["trial"][idx], c["block"][idx]))]
+    # (block, trial, slot) order as one key; rows come in block order, two trial-sorted runs per block (DM 1, DM 2)
+    key = (c["block"][idx].astype(np.int64) * rng.BLOCK + c["trial"][idx]) * 2 + (c["slot"][idx] >= rng.BLOCK)
+    order = idx[np.argsort(key, kind="stable")]
     if res.get("weighted"):
         return order, np.arange(1, len(order) + 1)
     trial_id = c["block"][order].astype(np.int64) * rng.BLOCK + c["trial"][order]
@@ -144,5 +150,5 @@ def write_hdf5(res, path, extra_attrs=None):
         for k in ("block", "trial", "slot", "prob", "L", "dm", "electron", "recoil_dm", "vertex", "parent", "mediator",
                   "crossing", "origin", "med_mass"):
             if k in c:
-                g[k] = np.asarray(c[k])[rows]
+                g[k] = np.asarray(c[k]) if res.get("output_order") else np.asarray(c[k])[rows]
     return len(rows)

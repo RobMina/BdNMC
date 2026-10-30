@@ -97,3 +97,32 @@ def test_hdf5_weights_sum_to_the_prediction(run, tmp_path, weighted):
         assert g["weight"][:].sum() == pytest.approx(res["se"], rel=1e-12)
         assert f.attrs["format"] == output.FORMAT and f.attrs["weighted"] == weighted
         assert g["electron"].shape == (n, 4) and g["crossing"].shape == (n, 2)
+
+
+def test_event_order_is_block_trial_slot(run):
+    # two blocks with DM in both slots: rows come in block order, slot 0 then slot 1 within a block
+    res = pipeline.finish(pipeline.candidates(CARD, 2 * rng.BLOCK, seed=5))
+    c = res["candidates"]
+    assert (c["slot"] >= rng.BLOCK).any()
+    rows, _ = output.accepted_events(res)
+    idx = np.nonzero(res["accepted_mask"])[0]
+    assert (rows == idx[np.lexsort((c["slot"][idx], c["trial"][idx], c["block"][idx]))]).all()
+
+
+@pytest.mark.parametrize("card", [CARD, ROOT / "phase0" / "cards" / "ref" / "mb_brem_m020.dat"])
+@pytest.mark.parametrize("weighted", [False, True])
+def test_device_event_path_matches_the_host_path(card, weighted):
+    # several batches (batch 1), and the forced fallback through candidates()
+    kw = {"seed": 7, "batch": 1, "cap": 1024}
+    host = pipeline.finish(pipeline.candidates(card, 3 * rng.BLOCK, **kw), weighted)
+    rows, event = output.accepted_events(host)
+    for ev in (pipeline.events(card, 3 * rng.BLOCK, weighted=weighted, **kw),
+               pipeline.events(card, 3 * rng.BLOCK, weighted=weighted, max_device_bytes=1, **kw)):
+        assert ev["events_path"] in ("device", "host")
+        for k in ("se", "se_weighted", "pmax", "accepted", "n_hits", "prob_sum"):
+            assert ev[k] == host[k], k
+        r2, e2 = output.accepted_events(ev)
+        assert (e2 == event).all()
+        c = ev["candidates"]
+        for k in host["candidates"]:
+            assert np.array_equal(np.asarray(c[k])[r2], host["candidates"][k][rows]), k

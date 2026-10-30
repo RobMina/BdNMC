@@ -17,7 +17,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from . import branching, brem, card as cardmod, decay, detector, electron, offshell, parents, particle_list, rng
+from . import (branching, brem, card as cardmod, decay, detector, electron, offshell, output, parents, particle_list,
+               rng)
 from .constants import MASS_ELECTRON as Me, MASS_PION_NEUTRAL, MASS_ETA, pi, speed_of_light
 from .kinematics import momentum, phi, rotate_y, rotate_z, theta
 
@@ -245,7 +246,8 @@ def _block(det, sc, ch, e_density, seed, chan_index, block_index, n_valid, cap):
     out = {
         "count": count, "prob_sum": jnp.sum(prob), "parent_info": pinfo,
         "slot": idx, "trial": trial, "prob": prob[safe], "u_acc": u_acc, "ang_ok": ang_ok,
-        "recoil_done": recoil_done, "dm": cdm, "electron": e4, "recoil_dm": r4, "vertex": vtx,
+        "recoil_done": recoil_done, "e_finite": jnp.isfinite(e4).all(axis=-1),
+        "dm": cdm, "electron": e4, "recoil_dm": r4, "vertex": vtx,
         "parent": par[trial], "mediator": med[trial], "L": L[safe],
         "crossing": jnp.stack([ct_in, ct_out], axis=-1),  # stock's Particle::crossing (entry, exit); p x t is metres
     }
@@ -269,11 +271,15 @@ CANDIDATE_KEYS = ("block", "trial", "slot", "prob", "u_acc", "ang_ok", "dm", "el
 # med_mass: off-shell decays only
 
 
-def candidates(card_path, n_trials, seed=None, blocks=None, batch=8, cap=1024, parent_sampler="stock"):
-    """Pass 1 over blocks `blocks` (a range; default all blocks of n_trials), `batch` blocks per device call.
-    Shards over disjoint block ranges combine exactly into the full run, because each block's random numbers
-    depend only on (seed, block). `cap` is the starting number of candidate rows kept per block: a batch with a
-    block above it is rerun with the cap doubled (one recompile), which changes only the padding."""
+PASS2_KEYS = ("slot", "trial", "prob", "u_acc", "ang_ok")  # what pass 2 and the output order need on the host
+CHECK_KEYS = ("count", "parent_info", "prob_sum", "recoil_done", "e_finite")
+
+
+def _pass1(card_path, n_trials, seed, blocks, batch, cap, parent_sampler, host_keys, stats):
+    """Pass 1 batch by batch, the next batch dispatched before the current one is copied and checked. Returns
+    (card, seed, channel, blocks, generator); the generator yields (chunk, cap used, host dict, valid-row mask,
+    device dict) per batch and adds prob_sum, n_hits, over_bar and cap to `stats`. The host dict holds the check
+    fields and `host_keys` (None: every key) for the batch's real blocks."""
     card = cardmod.parse_card(card_path)
     seed = card.seed if seed is None else seed
     det, sc, (ch,) = setup(card, parent_sampler)
@@ -282,6 +288,7 @@ def candidates(card_path, n_trials, seed=None, blocks=None, batch=8, cap=1024, p
     if blocks.start < 0 or blocks.stop > nblocks:
         raise ValueError(f"blocks {blocks} outside 0..{nblocks}")
     chunks = [list(blocks[i:i + batch]) for i in range(0, len(blocks), batch)]
+    stats |= {"prob_sum": 0.0, "n_hits": 0, "over_bar": 0, "cap": cap}
 
     def launch(chunk, cap):
         # Pad a short last batch with n_valid = 0 blocks (no hits) so the batch shape, and the compile, stay fixed.
@@ -289,47 +296,130 @@ def candidates(card_path, n_trials, seed=None, blocks=None, batch=8, cap=1024, p
         nv = [min(rng.BLOCK, n_trials - b * rng.BLOCK) for b in chunk] + [0] * (batch - len(chunk))
         return blocks_batch(det, sc, ch, card.e_density, seed, 0, jnp.asarray(bi), jnp.asarray(nv), cap)
 
-    parts, prob_sum, n_hits, over_bar = [], 0.0, 0, 0
-    pending = launch(chunks[0], cap) if chunks else None
-    for i, chunk in enumerate(chunks):
-        out, used_cap = jax.device_get(pending), cap
-        if i + 1 < len(chunks):
-            pending = launch(chunks[i + 1], cap)  # dispatched before this batch is checked (async)
-        while out["count"][: len(chunk)].max() > used_cap:
-            used_cap *= 2
-            out = jax.device_get(launch(chunk, used_cap))
-        if used_cap > cap:
-            cap = used_cap
+    def gen():
+        cap = stats["cap"]
+        pending = launch(chunks[0], cap) if chunks else None
+        for i, chunk in enumerate(chunks):
+            dev, used_cap = pending, cap
             if i + 1 < len(chunks):
-                pending = launch(chunks[i + 1], cap)
-        for j, b in enumerate(chunk):
-            o = jax.tree.map(lambda x: x[j], out)
-            pi_ = o["parent_info"]
-            if pi_["filled"] != rng.BLOCK:
-                raise RuntimeError(f"block {b}: parent sampler ran out of rounds")
-            if pi_["over_bar"] and not isinstance(ch.dist, parents.SanfordWang):
-                raise RuntimeError(f"block {b}: {pi_['over_bar']} parent proposals above the bar")
-            if "decay_filled" in pi_ and (pi_["decay_filled"] != rng.BLOCK or pi_["decay_over_bar"]):
-                raise RuntimeError(f"block {b}: off-shell (s, theta) sampler: {pi_['decay_filled']} filled, "
-                                   f"{pi_['decay_over_bar']} proposals above the bar")
-            k = int(o["count"])
-            if not o["recoil_done"][:k].all():
-                raise RuntimeError(f"block {b}: recoil sampler ran out of rounds")
-            # ThetaEe's acos argument can round above 1 at the recoil endpoint (stock shares this and writes NaN).
-            live = o["prob"][:k] > 0
-            if not np.isfinite(o["electron"][:k][live]).all():
-                raise RuntimeError(f"block {b}: non-finite recoil electron")
-            parts.append({key: np.asarray(o[key])[:k] for key in CANDIDATE_KEYS if key != "block" and key in o}
-                         | {"block": np.full(k, b)})
-            prob_sum += float(o["prob_sum"])
-            n_hits += k
-            over_bar += int(pi_["over_bar"])
-    cat = {key: np.concatenate([p[key] for p in parts]) for key in CANDIDATE_KEYS if parts and key in parts[0]}
+                pending = launch(chunks[i + 1], cap)  # dispatched before this batch is copied and checked (async)
+            while np.asarray(dev["count"])[: len(chunk)].max() > used_cap:
+                used_cap *= 2
+                dev = launch(chunk, used_cap)
+            if used_cap > cap:
+                cap = stats["cap"] = used_cap
+                if i + 1 < len(chunks):
+                    pending = launch(chunks[i + 1], cap)
+            keys = CHECK_KEYS + (CANDIDATE_KEYS if host_keys is None else host_keys)
+            nb = len(chunk)
+            out = jax.tree.map(lambda x: x[:nb], jax.device_get({k: dev[k] for k in keys if k in dev}))
+            rows = _check_batch(ch, chunk, out, used_cap)
+            for s in out["prob_sum"]:
+                stats["prob_sum"] += float(s)  # block by block in block order, so the sum does not depend on the batch
+            stats["n_hits"] += int(out["count"].sum())
+            stats["over_bar"] += int(out["parent_info"]["over_bar"].sum())
+            yield chunk, used_cap, out, rows, dev
+    return card, seed, ch, blocks, gen()
+
+
+def _check_batch(ch, chunk, out, cap):
+    """Fail on a block whose parent or decay sampler did not fill it or exceeded its bar, whose recoil sampler ran
+    out of rounds, or with a non-finite recoil electron. Returns the valid-row mask (block, row)."""
+    pi_, counts = out["parent_info"], out["count"]
+    rows = np.arange(cap) < counts[:, None]
+
+    def first(bad):
+        return chunk[int(np.argmax(bad))]
+    if (pi_["filled"] != rng.BLOCK).any():
+        raise RuntimeError(f"block {first(pi_['filled'] != rng.BLOCK)}: parent sampler ran out of rounds")
+    if pi_["over_bar"].any() and not isinstance(ch.dist, parents.SanfordWang):
+        raise RuntimeError(f"block {first(pi_['over_bar'] > 0)}: parent proposals above the bar")
+    if "decay_filled" in pi_ and ((pi_["decay_filled"] != rng.BLOCK) | (pi_["decay_over_bar"] > 0)).any():
+        raise RuntimeError(f"block {first((pi_['decay_filled'] != rng.BLOCK) | (pi_['decay_over_bar'] > 0))}: "
+                           "off-shell (s, theta) sampler did not fill the block or exceeded its bar")
+    if not out["recoil_done"][rows].all():
+        raise RuntimeError(f"block {first(~(out['recoil_done'] | ~rows).all(axis=1))}: recoil sampler ran out of "
+                           "rounds")
+    # ThetaEe's acos argument can round above 1 at the recoil endpoint (stock shares this and writes NaN).
+    bad_e = rows & (out["prob"] > 0) & ~out["e_finite"]
+    if bad_e.any():
+        raise RuntimeError(f"block {first(bad_e.any(axis=1))}: non-finite recoil electron")
+    return rows
+
+
+def _result(card_path, card, seed, ch, blocks, n_trials, batch, parent_sampler, stats, cat):
     trials = sum(min(rng.BLOCK, n_trials - b * rng.BLOCK) for b in blocks)
     return {"card": str(card_path), "seed": seed, "n_trials": n_trials, "blocks": [blocks.start, blocks.stop],
-            "trials": trials, "n_hits": n_hits, "prob_sum": prob_sum, "parent_over_bar": over_bar,
-            "vnum": ch.vnum, "efficiency": card.efficiency, "batch": batch, "cap": cap,
-            "parent_sampler": parent_sampler, "candidates": cat}
+            "trials": trials, "n_hits": stats["n_hits"], "prob_sum": stats["prob_sum"],
+            "parent_over_bar": stats["over_bar"], "vnum": ch.vnum, "efficiency": card.efficiency, "batch": batch,
+            "cap": stats["cap"], "parent_sampler": parent_sampler, "candidates": cat}
+
+
+def candidates(card_path, n_trials, seed=None, blocks=None, batch=8, cap=1024, parent_sampler="stock"):
+    """Pass 1 over blocks `blocks` (a range; default all blocks of n_trials), `batch` blocks per device call.
+    Shards over disjoint block ranges combine exactly into the full run, because each block's random numbers
+    depend only on (seed, block). `cap` is the starting number of candidate rows kept per block: a batch with a
+    block above it is rerun with the cap doubled (one recompile), which changes only the padding."""
+    stats = {}
+    card, seed, ch, blocks, batches = _pass1(card_path, n_trials, seed, blocks, batch, cap, parent_sampler, None,
+                                             stats)
+    parts = []
+    for chunk, _, out, rows, _ in batches:
+        parts.append({key: out[key][rows] for key in CANDIDATE_KEYS if key != "block" and key in out}
+                     | {"block": np.repeat(np.asarray(chunk), out["count"])})
+    cat = {key: np.concatenate([p[key] for p in parts]) for key in CANDIDATE_KEYS if parts and key in parts[0]}
+    return _result(card_path, card, seed, ch, blocks, n_trials, batch, parent_sampler, stats, cat)
+
+
+@jax.jit
+def _gather_rows(out, idx):
+    return {k: v.reshape((-1,) + v.shape[2:])[idx] for k, v in out.items()}
+
+
+def events(card_path, n_trials, seed=None, weighted=False, batch=8, cap=1024, parent_sampler="stock",
+           max_device_bytes=None):
+    """Pass 1 and pass 2 for event output: the same result and accepted events as `finish(candidates(...))`, but
+    the candidates' large fields stay on the device until pass 2 has chosen the accepted rows, which are then
+    gathered there in output order; only they and the pass-2 fields are copied to the host. `candidates` in the
+    result holds the accepted rows in output order (`output_order` True, event numbers in `event`). If the
+    device-resident batches would exceed `max_device_bytes` (default: half the device memory, or 8 GB when the
+    backend does not report it), the run is redone through `candidates` instead, with the same result."""
+    if max_device_bytes is None:
+        limit = (jax.devices()[0].memory_stats() or {}).get("bytes_limit")
+        max_device_bytes = limit // 2 if limit else 8 << 30
+    stats = {}
+    card, seed, ch, blocks, batches = _pass1(card_path, n_trials, seed, None, batch, cap, parent_sampler,
+                                             PASS2_KEYS, stats)
+    small, kept, resident = [], [], 0
+    for chunk, used_cap, out, rows, dev in batches:
+        big = {k: v for k, v in dev.items() if k not in CHECK_KEYS + PASS2_KEYS}
+        resident += sum(v.nbytes for v in big.values())
+        if resident > max_device_bytes:
+            del kept
+            res = finish(candidates(card_path, n_trials, seed, batch=batch, cap=cap, parent_sampler=parent_sampler),
+                         weighted)
+            return res | {"events_path": "host"}
+        small.append({k: out[k][rows] for k in PASS2_KEYS} | {"block": np.repeat(np.asarray(chunk), out["count"])})
+        kept.append((big, used_cap, out["count"]))
+    cat = {k: np.concatenate([s[k] for s in small]) for k in (*PASS2_KEYS, "block")} if small else {}
+    res = finish(_result(card_path, card, seed, ch, blocks, n_trials, batch, parent_sampler, stats, cat), weighted)
+    order, event = output.accepted_events(res)
+    # output order is (block, trial, slot), so each batch's rows form one contiguous run of `order`
+    ends = np.cumsum([int(c.sum()) for _, _, c in kept])
+    bounds = np.searchsorted(np.searchsorted(ends, order, side="right"), np.arange(len(kept) + 1))
+    gathered = []
+    for (big, used_cap, counts), start, a, b in zip(kept, np.r_[0, ends[:-1]], bounds[:-1], bounds[1:]):
+        sel = order[a:b] - start  # index among the batch's valid rows
+        first = np.cumsum(counts) - counts  # each block's first valid row
+        j = np.searchsorted(first, sel, side="right") - 1
+        flat = j * used_cap + (sel - first[j])
+        idx = np.concatenate([flat, np.zeros(-len(flat) % rng.BLOCK, flat.dtype)])  # few distinct lengths to compile
+        g = jax.device_get(_gather_rows(big, jnp.asarray(idx)))
+        gathered.append({k: v[:len(flat)] for k, v in g.items()})
+    rows_out = {k: np.concatenate([g[k] for g in gathered]) for k in gathered[0]} if gathered else {}
+    rows_out |= {k: cat[k][order] for k in (*PASS2_KEYS, "block")} if small else {}
+    return res | {"candidates": rows_out, "accepted_mask": np.ones(len(order), bool), "output_order": True,
+                  "event": event, "events_path": "device"}
 
 
 def merge(shards):
