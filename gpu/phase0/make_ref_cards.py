@@ -19,6 +19,9 @@ BASES = {  # base card stem -> (samplesize, max_trials)
     # particle_list (added 2026-10-29; base cards and lists from make_lists.py): 8.5e-4 / 1.3e-2 accepted per trial
     "mb_list_m005": (1_000_000, 4_000_000_000),
     "he_list_cuboid_m005": (1_000_000, 1_000_000_000),
+    # off-shell pi0 decay (added 2026-10-29; m_V 0.2 GeV, make_offshell_cards.py)
+    "mb_offshell_m005": (1_000_000, 4_000_000_000),
+    "he_offshell_cuboid_m005": (1_000_000, 1_000_000_000),
 }
 MASSES_MEV = [1, 5, 20, 45]
 SEED0 = 2026102800

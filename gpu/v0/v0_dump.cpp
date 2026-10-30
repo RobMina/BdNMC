@@ -106,5 +106,23 @@ int main() {
             std::printf("bmpt_k0_ics %.17g %.17g %.17g\n", pb, tb, bmptk.Invariant_Cross_Section_Kaon(pb, tb));
         }
     }
+    // off-shell decays: the off-shell branching ratio and its (s, theta) density, for V above the meson mass, V
+    // below 2 m_chi, and (pi0) the V pole inside the window; 20 s x 10 theta points, open at the window's ends.
+    struct OffShellPoint { const char* meson; double mv, mx; };
+    for (OffShellPoint o : {OffShellPoint{"pi0", 0.2, 0.005}, OffShellPoint{"pi0", 0.05, 0.03},
+                            OffShellPoint{"pi0", 0.1, 0.01}, OffShellPoint{"eta", 0.6, 0.02},
+                            OffShellPoint{"eta", 0.3, 0.2}}) {
+        bool eta = std::string(o.meson) == "eta";
+        double mm = eta ? MASS_ETA : MASS_PION_NEUTRAL, lo = 4 * o.mx * o.mx, hi = mm * mm;
+        std::printf("br_offshell_%s %.17g %.17g %.17g\n", o.meson, o.mv, o.mx,
+                    eta ? breta_to_gamma_dm_dm(o.mv, o.mx, kap, alD) : brpi0_to_gamma_dm_dm(o.mv, o.mx, kap, alD));
+        for (int i = 1; i <= 20; i++)
+            for (int j = 1; j <= 10; j++) {
+                double s = lo + (hi - lo) * i / 21.0, th = pi * j / 11.0;
+                std::printf("d2br_offshell_%s %.17g %.17g %.17g %.17g %.17g\n", o.meson, o.mv, o.mx, s, th,
+                            eta ? d2breta_to_gamma_dm_dm(o.mv, o.mx, kap, alD, s, th)
+                                : d2brpi0_to_gamma_dm_dm(o.mv, o.mx, kap, alD, s, th));
+            }
+    }
     return 0;
 }

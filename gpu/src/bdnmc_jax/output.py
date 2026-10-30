@@ -101,7 +101,8 @@ def write_text(res, path, summary_path=None, run=None):
             o = tuple(c["origin"][r0]) if "origin" in c else zero4
             if parent is not None:
                 lines.append(_particle(parent[0], c["parent"][r0], parent[1], o, o))
-            lines.append(_particle("V", c["mediator"][r0], card.mass_v, o, o))
+            m_v = c["med_mass"][r0] if "med_mass" in c else card.mass_v  # off-shell: Set_Mass(sqrt(s))
+            lines.append(_particle("V", c["mediator"][r0], m_v, o, o))
             for r in rows[i:j]:
                 v = tuple(c["vertex"][r])
                 lines.append(_particle("DM", c["dm"][r], card.mass_dm, o, v, tuple(c["crossing"][r])))
@@ -141,7 +142,7 @@ def write_hdf5(res, path, extra_attrs=None):
         g["event"] = event
         g["weight"] = row_weights(res, rows)
         for k in ("block", "trial", "slot", "prob", "L", "dm", "electron", "recoil_dm", "vertex", "parent", "mediator",
-                  "crossing", "origin"):
+                  "crossing", "origin", "med_mass"):
             if k in c:
                 g[k] = np.asarray(c[k])[rows]
     return len(rows)

@@ -6,7 +6,8 @@
 # JAX's default (GPU when one is visible). SEED_OFFSET (default 0) is added to every card's seed, for an independent
 # repeat. V_SET=brem runs the eight proton-brem points (v_config_brem.json), 2e7 trials each; V_SET=eta the eight
 # eta points (v_config_eta.json), 5e8 (mb) and 2e8 (he) trials each; V_SET=list the eight particle_list points
-# (v_config_list.json, lists from phase0/make_lists.py), 5e8 and 4e7.
+# (v_config_list.json, lists from phase0/make_lists.py), 5e8 and 4e7; V_SET=offshell the eight off-shell pi0 points
+# (v_config_offshell.json), 5e8 and 4e7.
 set -o pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 out_dir=${V_OUT:-$root/validation/out/v}
@@ -28,6 +29,9 @@ case ${V_SET:-pi0} in
     list) specs="mb_list_m001:500000000 mb_list_m005:500000000 mb_list_m020:500000000 mb_list_m045:500000000
                  he_list_cuboid_m001:40000000 he_list_cuboid_m005:40000000 he_list_cuboid_m020:40000000
                  he_list_cuboid_m045:40000000" ;;
+    offshell) specs="mb_offshell_m001:500000000 mb_offshell_m005:500000000 mb_offshell_m020:500000000
+                     mb_offshell_m045:500000000 he_offshell_cuboid_m001:40000000 he_offshell_cuboid_m005:40000000
+                     he_offshell_cuboid_m020:40000000 he_offshell_cuboid_m045:40000000" ;;
     *) echo "unknown V_SET ${V_SET}"; exit 2 ;;
 esac
 for spec in $specs; do

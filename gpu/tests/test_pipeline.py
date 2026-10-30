@@ -63,7 +63,8 @@ def test_batch_and_cap_do_not_change_results():
     a = pipeline.candidates(card, n, seed=11, batch=1, cap=64)["candidates"]
     b = pipeline.candidates(card, n, seed=11, batch=3, cap=8192)["candidates"]
     assert len(a["prob"]) > 64
-    assert a.keys() == b.keys() == set(pipeline.CANDIDATE_KEYS) - {"origin"}  # origin: particle_list only
+    # origin: particle_list only; med_mass: off-shell only
+    assert a.keys() == b.keys() == set(pipeline.CANDIDATE_KEYS) - {"origin", "med_mass"}
     for k in a:
         np.testing.assert_array_equal(a[k], b[k], err_msg=k)
 

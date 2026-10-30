@@ -17,7 +17,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from . import branching, brem, card as cardmod, decay, detector, electron, parents, particle_list, rng
+from . import branching, brem, card as cardmod, decay, detector, electron, offshell, parents, particle_list, rng
 from .constants import MASS_ELECTRON as Me, MASS_PION_NEUTRAL, MASS_ETA, pi, speed_of_light
 from .kinematics import momentum, phi, rotate_y, rotate_z, theta
 
@@ -35,12 +35,17 @@ class Channel:
     # "brem": proton bremsstrahlung V -> chi chi
     kind: str = "meson"
     rows: object = None  # particle_list rows (N, 7), kind "list" only
+    offshell: object = None  # offshell.OffShell when the meson decays through V* (meson and list kinds)
+    decay_fmax: float = 0.0  # its bar
+    mv_gamma: float = 0.0  # m_V Gamma_V in its propagator
 
 
-# Masses, the sampler bar, Vnum and the list rows are traced leaves under jit (no recompile per mass, goal P2); the
-# name, the parent distribution (beam, target and the brem window; a list's path and length) and the kind are static.
-jax.tree_util.register_dataclass(Channel, data_fields=["m_meson", "fmax", "vnum", "m_v", "m_dm", "rows"],
-                                 meta_fields=["name", "dist", "kind"])
+# Masses, the sampler bars, Vnum, m_V Gamma_V and the list rows are traced leaves under jit (no recompile per mass,
+# goal P2); the name, the parent distribution (beam, target and the brem window; a list's path and length), the kind
+# and whether the decay is off-shell are static.
+jax.tree_util.register_dataclass(
+    Channel, data_fields=["m_meson", "fmax", "vnum", "m_v", "m_dm", "rows", "decay_fmax", "mv_gamma"],
+    meta_fields=["name", "dist", "kind", "offshell"])
 
 
 @lru_cache(maxsize=None)
@@ -83,13 +88,16 @@ def setup(card, parent_sampler="stock"):
         if ch.production_distribution not in dists + ("particle_list",):
             raise NotImplementedError(f"{ch.production_channel} with {ch.production_distribution}")
         br, off = channel_br(card.mass_v, card.mass_dm, card.epsilon, card.alpha_d)
-        if not branching.uses_on_shell_decay(off, card.mass_v, card.mass_dm, m_meson):
-            raise NotImplementedError(f"off-shell {ch.production_channel}")
         if br <= 0:
             raise NotImplementedError(f"{ch.production_channel} closed (2 m_chi > meson mass)")
+        dec = {}
+        if not branching.uses_on_shell_decay(off, card.mass_v, card.mass_dm, m_meson):
+            osh = offshell.OffShell("pi0" if ch.production_channel == "pi0_decay" else "eta")
+            mvg = offshell.mv_gamma(card.mass_v, card.mass_dm, card.epsilon, card.alpha_d)
+            dec = {"offshell": osh, "decay_fmax": osh.find_fmax(card.mass_v, card.mass_dm, mvg), "mv_gamma": mvg}
         vnum = br * card.pot * ch.meson_per_pi0 * card.pi0_per_pot  # Kinetic_Mixing.cpp:141
         if ch.production_distribution == "particle_list":
-            chans.append(_list_channel(ch, parent_sampler, m_meson, vnum, card))
+            chans.append(_list_channel(ch, parent_sampler, m_meson, vnum, card, dec))
             continue
         if ch.production_distribution in ("pi0_sanfordwang", "k0_sanfordwang"):
             if "sanfordwang_file" in ch.raw or "distribution_parameter_file" in ch.raw:
@@ -107,13 +115,13 @@ def setup(card, parent_sampler="stock"):
         if parent_sampler == "envelope":
             dist, fmax = _envelope(dist), 1.0
         chans.append(Channel(ch.production_channel, m_meson, dist, float(fmax), vnum,
-                             card.mass_v, card.mass_dm))
+                             card.mass_v, card.mass_dm, **dec))
     if len(chans) != 1:
         raise NotImplementedError("exactly one production channel for now")
     return det, sc, chans
 
 
-def _list_channel(ch, parent_sampler, m_meson, vnum, card):
+def _list_channel(ch, parent_sampler, m_meson, vnum, card, dec):
     """Meson decay with parents from `particle_list_file` (Model.cpp:131-146; particle_list.py)."""
     if parent_sampler != "stock":
         raise NotImplementedError("parent_sampler applies to the analytic distributions, not to particle_list")
@@ -122,7 +130,7 @@ def _list_channel(ch, parent_sampler, m_meson, vnum, card):
     position = ch.raw.get("particle_list_position", "").lower() == "true"  # Parameter.cpp:239
     dist, rows = particle_list.load(ch.raw["particle_list_file"], position)
     return Channel(ch.production_channel, m_meson, dist, 0.0, vnum, card.mass_v, card.mass_dm, kind="list",
-                   rows=jnp.asarray(rows))
+                   rows=jnp.asarray(rows), **dec)
 
 
 def _brem_channel(card, ch, parent_sampler):
@@ -182,16 +190,29 @@ def _recoil(sc, key, key_phi, dm, live, u_pos, t_in, t_out, origin=None, max_rou
     return e4, r4, jnp.concatenate([pos, time[:, None]], axis=-1), ang_ok & live, done
 
 
+def _meson_decay(ch, key, par, n, pinfo):
+    """meson -> gamma V(*) -> gamma chi chi for n parents: on-shell DecayDM, or the (s, theta) sampler and
+    DecayDM_Off_Shell (offshell.py). Returns (V, dm1, dm2, V mass or None); the off-shell sampler's diagnostics go
+    into `pinfo`."""
+    if ch.offshell is None:
+        u = rng.uniform(key, rng.DECAY, (n, 4))
+        return (*decay.decay_dm(par, ch.m_meson, ch.m_v, ch.m_dm, u[:, 0], u[:, 1], u[:, 2], u[:, 3]), None)
+    x, filled, nprop, nover = rng.rejection(jax.random.fold_in(key, rng.OFFSHELL), ch.offshell.propose,
+                                            ch.decay_fmax, n, n, params=(ch.m_meson, ch.m_v, ch.m_dm, ch.mv_gamma))
+    pinfo |= {"decay_filled": filled, "decay_proposed": nprop, "decay_over_bar": nover}
+    u = rng.uniform(key, rng.DECAY, (n, 3))
+    return offshell.decay(par, ch.m_meson, ch.m_dm, x[:, 0], x[:, 1], u[:, 0], u[:, 1], u[:, 2])
+
+
 def _block(det, sc, ch, e_density, seed, chan_index, block_index, n_valid, cap):
     """Pass 1 for one block. Returns per-block sums and up to `cap` candidates (fixed shape, `count` valid)."""
     n = rng.BLOCK
     key = rng.block_key(seed, chan_index, block_index)
-    origin = None
+    origin, m_med = None, None
     if ch.kind == "list":
         par, origin = particle_list.block(ch.rows, block_index, n, ch.m_meson)
         pinfo = {"filled": jnp.asarray(n), "proposed": jnp.asarray(n), "over_bar": jnp.asarray(0)}
-        u = rng.uniform(key, rng.DECAY, (n, 4))
-        med, d1, d2 = decay.decay_dm(par, ch.m_meson, ch.m_v, ch.m_dm, u[:, 0], u[:, 1], u[:, 2], u[:, 3])
+        med, d1, d2, m_med = _meson_decay(ch, key, par, n, pinfo)
     elif ch.kind == "brem":
         med, pinfo = brem.sample_block(ch.dist, key, n, ch.fmax, ch.m_v)
         par = med  # no meson: the V is the parent of the event
@@ -199,8 +220,7 @@ def _block(det, sc, ch, e_density, seed, chan_index, block_index, n_valid, cap):
         d1, d2 = decay.two_body(med, ch.m_v, ch.m_dm, ch.m_dm, u[:, 0], u[:, 1])
     else:
         par, pinfo = parents.sample_block(ch.dist, key, n, ch.fmax, ch.m_meson)
-        u = rng.uniform(key, rng.DECAY, (n, 4))
-        med, d1, d2 = decay.decay_dm(par, ch.m_meson, ch.m_v, ch.m_dm, u[:, 0], u[:, 1], u[:, 2], u[:, 3])
+        med, d1, d2, m_med = _meson_decay(ch, key, par, n, pinfo)
     valid = jnp.arange(n) < n_valid
     dm = jnp.concatenate([d1, d2])  # candidate slot = dm index * n + trial index
     origin2 = None if origin is None else jnp.concatenate([origin, origin])
@@ -231,6 +251,8 @@ def _block(det, sc, ch, e_density, seed, chan_index, block_index, n_valid, cap):
     }
     if origin is not None:
         out["origin"] = origin[trial]  # parent origin = V origin = DM origin (x, y, z, t)
+    if m_med is not None:
+        out["med_mass"] = m_med[trial]  # off-shell: the V* mass sqrt(s)
     return out
 
 
@@ -243,7 +265,8 @@ def blocks_batch(det, sc, ch, e_density, seed, chan_index, block_indices, n_vali
 
 
 CANDIDATE_KEYS = ("block", "trial", "slot", "prob", "u_acc", "ang_ok", "dm", "electron", "recoil_dm", "vertex",
-                  "parent", "mediator", "L", "crossing", "origin")  # origin: particle_list channels only
+                  "parent", "mediator", "L", "crossing", "origin", "med_mass")  # origin: particle_list channels;
+# med_mass: off-shell decays only
 
 
 def candidates(card_path, n_trials, seed=None, blocks=None, batch=8, cap=1024, parent_sampler="stock"):
@@ -286,6 +309,9 @@ def candidates(card_path, n_trials, seed=None, blocks=None, batch=8, cap=1024, p
                 raise RuntimeError(f"block {b}: parent sampler ran out of rounds")
             if pi_["over_bar"] and not isinstance(ch.dist, parents.SanfordWang):
                 raise RuntimeError(f"block {b}: {pi_['over_bar']} parent proposals above the bar")
+            if "decay_filled" in pi_ and (pi_["decay_filled"] != rng.BLOCK or pi_["decay_over_bar"]):
+                raise RuntimeError(f"block {b}: off-shell (s, theta) sampler: {pi_['decay_filled']} filled, "
+                                   f"{pi_['decay_over_bar']} proposals above the bar")
             k = int(o["count"])
             if not o["recoil_done"][:k].all():
                 raise RuntimeError(f"block {b}: recoil sampler ran out of rounds")

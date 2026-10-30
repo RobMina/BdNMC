@@ -248,5 +248,69 @@
   "seed": 2026102832,
   "samplesize": 1000000,
   "max_trials": 1000000000
+ },
+ {
+  "stem": "ref/mb_offshell_m001",
+  "base": "mb_offshell_m005",
+  "m_chi_MeV": 1,
+  "seed": 2026102833,
+  "samplesize": 1000000,
+  "max_trials": 4000000000
+ },
+ {
+  "stem": "ref/mb_offshell_m005",
+  "base": "mb_offshell_m005",
+  "m_chi_MeV": 5,
+  "seed": 2026102834,
+  "samplesize": 1000000,
+  "max_trials": 4000000000
+ },
+ {
+  "stem": "ref/mb_offshell_m020",
+  "base": "mb_offshell_m005",
+  "m_chi_MeV": 20,
+  "seed": 2026102835,
+  "samplesize": 1000000,
+  "max_trials": 4000000000
+ },
+ {
+  "stem": "ref/mb_offshell_m045",
+  "base": "mb_offshell_m005",
+  "m_chi_MeV": 45,
+  "seed": 2026102836,
+  "samplesize": 1000000,
+  "max_trials": 4000000000
+ },
+ {
+  "stem": "ref/he_offshell_cuboid_m001",
+  "base": "he_offshell_cuboid_m005",
+  "m_chi_MeV": 1,
+  "seed": 2026102837,
+  "samplesize": 1000000,
+  "max_trials": 1000000000
+ },
+ {
+  "stem": "ref/he_offshell_cuboid_m005",
+  "base": "he_offshell_cuboid_m005",
+  "m_chi_MeV": 5,
+  "seed": 2026102838,
+  "samplesize": 1000000,
+  "max_trials": 1000000000
+ },
+ {
+  "stem": "ref/he_offshell_cuboid_m020",
+  "base": "he_offshell_cuboid_m005",
+  "m_chi_MeV": 20,
+  "seed": 2026102839,
+  "samplesize": 1000000,
+  "max_trials": 1000000000
+ },
+ {
+  "stem": "ref/he_offshell_cuboid_m045",
+  "base": "he_offshell_cuboid_m005",
+  "m_chi_MeV": 45,
+  "seed": 2026102840,
+  "samplesize": 1000000,
+  "max_trials": 1000000000
  }
 ]

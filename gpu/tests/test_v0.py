@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 import bdnmc_jax  # noqa: F401
-from bdnmc_jax import branching, brem, detector, electron, parents
+from bdnmc_jax import branching, brem, detector, electron, offshell, parents
 from bdnmc_jax.constants import MASS_ELECTRON as Me
 
 DUMP = Path(__file__).resolve().parents[1] / "v0" / "v0_dump.txt"
@@ -178,3 +178,23 @@ def test_eta(dump):
         assert branching.bretatoVgamma(MV, mx, KAP, ALD) == pytest.approx(br, rel=REL)
     _check_sanfordwang(parents.SanfordWang.k0(), dump["sanfordwang_k0"])
     _check_bmpt_ics(parents.BMPT(120.0, 12.0, choice="k0"), dump["bmpt_k0_ics"], 2.45)
+
+
+def test_offshell(dump):
+    if "d2br_offshell_pi0" not in dump:
+        pytest.skip("v0_dump.txt predates the off-shell entries (rebuild the harness)")
+    for meson, br_f, d2_f in (("pi0", branching.brpi0_to_gamma_dm_dm, branching.d2brpi0_to_gamma_dm_dm),
+                              ("eta", branching.breta_to_gamma_dm_dm, branching.d2breta_to_gamma_dm_dm)):
+        for mv, mx, br in dump[f"br_offshell_{meson}"]:
+            assert br_f(mv, mx, KAP, ALD) == pytest.approx(br, rel=REL)
+        rows = dump[f"d2br_offshell_{meson}"]
+        got = [d2_f(mv, mx, KAP, ALD, s, th) for mv, mx, s, th, _ in rows]
+        close(got, rows[:, 4])
+        # the sampler's shape is the same density up to a constant per (m_V, m_chi)
+        osh = offshell.OffShell(meson)
+        for mv, mx in {(r[0], r[1]) for r in rows}:
+            sel = (rows[:, 0] == mv) & (rows[:, 1] == mx)
+            shape = np.asarray(osh.shape(jnp.asarray(rows[sel, 2]), jnp.asarray(rows[sel, 3]), osh.m_meson, mv, mx,
+                                         offshell.mv_gamma(mv, mx, KAP, ALD)))
+            ratio = rows[sel, 4] / shape
+            np.testing.assert_allclose(ratio, ratio[0], rtol=1e-12)

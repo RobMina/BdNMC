@@ -59,6 +59,12 @@ def dbrpi0_to_gamma_dm_dm(mv, mx, kappa, alphaD, s):
             / (6.0 * mpi0 ** 6 * pi * ((s - mv * mv) ** 2 + (mv * GammaV(mv, mx, kappa, alphaD)) ** 2)))
 
 
+def d2breta_to_gamma_dm_dm(mv, mx, kappa, alphaD, s, theta):
+    return (bretato2gamma / brpi0to2gamma * math.sqrt(1 - 4 * mx * mx / s) * (meta ** 2 - s) ** 3 * (s - 4 * mx * mx)
+            * alphaD * kappa ** 2 * math.sin(theta) ** 3
+            / (8 * meta ** 6 * pi * ((s - mv * mv) ** 2 + (mv * GammaV(mv, mx, kappa, alphaD)) ** 2)))
+
+
 def dbreta_to_gamma_dm_dm(mv, mx, kappa, alphaD, s):
     return (bretato2gamma / brpi0to2gamma * math.sqrt(1.0 - 4.0 * mx * mx / s) * (meta ** 2 - s) ** 3
             * (s - 4.0 * mx * mx) * alphaD * kappa ** 2

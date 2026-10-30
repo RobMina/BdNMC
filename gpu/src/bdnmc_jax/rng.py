@@ -12,7 +12,7 @@ import jax.numpy as jnp
 BLOCK = 1 << 16  # trials per reproducibility unit; changing it changes every random stream
 
 # Stage ids (fold_in constants); new stages get new ids, existing ids never change meaning.
-CHANNEL, PARENT, PARENT_PHI, DECAY, ACCEPT, RECOIL, RECOIL_PHI, POSITION = range(8)
+CHANNEL, PARENT, PARENT_PHI, DECAY, ACCEPT, RECOIL, RECOIL_PHI, POSITION, OFFSHELL = range(9)
 
 
 def block_key(seed, channel, block):

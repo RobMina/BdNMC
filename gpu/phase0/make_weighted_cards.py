@@ -22,6 +22,9 @@ TRIALS = {  # base card stem -> total weighted trials per reference point, split
     # particle_list (appended): no parent sampler, so no running-maximum bias in the parents
     "mb_list_m005": 500_000_000,
     "he_list_cuboid_m005": 40_000_000,
+    # off-shell pi0 decay (appended); BMPT's running-maximum bias as for he_pi0
+    "mb_offshell_m005": 500_000_000,
+    "he_offshell_cuboid_m005": 40_000_000,
 }
 MASSES_MEV = [1, 5, 20, 45]
 SEED0 = 2026102900
