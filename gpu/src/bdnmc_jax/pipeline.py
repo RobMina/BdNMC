@@ -390,11 +390,13 @@ def _gather_rows(out, idx):
 def events(card_path, n_trials, seed=None, weighted=False, batch=8, cap=1024, parent_sampler="stock",
            max_device_bytes=None):
     """Pass 1 and pass 2 for event output: the same result and accepted events as `finish(candidates(...))`, but
-    the candidates' large fields stay on the device until pass 2 has chosen the accepted rows, which are then
-    gathered there in output order; only they and the pass-2 fields are copied to the host. `candidates` in the
-    result holds the accepted rows in output order (`output_order` True, event numbers in `event`). If the
-    device-resident batches would exceed `max_device_bytes` (default: half the device memory, or 8 GB when the
-    backend does not report it), the run is redone through `candidates` instead, with the same result."""
+    only the pass-2 fields of every candidate are copied to the host. As each batch is checked, the rows that pass
+    against the running maximum probability (a superset of the finally accepted rows, since the maximum only grows)
+    are gathered on the device in output order and their copy started, overlapping later batches; pass 2 then keeps
+    the rows accepted against the run's maximum. `candidates` in the result holds the accepted rows in output order
+    (`output_order` True, event numbers in `event`). If the gathered rows would exceed `max_device_bytes` (default:
+    half the device memory, or 8 GB when the backend does not report it), the run is redone through `candidates`
+    instead, with the same result."""
     if max_device_bytes is None:
         limit = (jax.devices()[0].memory_stats() or {}).get("bytes_limit")
         max_device_bytes = limit // 2 if limit else 8 << 30
@@ -403,36 +405,42 @@ def events(card_path, n_trials, seed=None, weighted=False, batch=8, cap=1024, pa
                                              PASS2_KEYS, stats)
     # a brem event's parent is its V, so `parent` repeats `mediator` and is not copied
     skip = CHECK_KEYS + PASS2_KEYS + (("parent",) if ch.kind == "brem" else ())
-    small, kept, resident = [], [], 0
+    small, pending, resident, pmax_run, n0 = [], [], 0, 0.0, 0
     for chunk, used_cap, out, rows, dev in batches:
-        big = {k: v for k, v in dev.items() if k not in skip}
-        resident += sum(v.nbytes for v in big.values())
+        s = {k: out[k][rows] for k in PASS2_KEYS} | {"block": np.repeat(np.asarray(chunk), out["count"])}
+        small.append(s)
+        if len(s["prob"]):
+            pmax_run = max(pmax_run, float(s["prob"].max()))
+        keep = s["ang_ok"] if weighted else (s["prob"] > s["u_acc"] * pmax_run) & s["ang_ok"]
+        sel = np.flatnonzero(keep)
+        sel = sel[np.argsort(output.order_key(s["block"][sel], s["trial"][sel], s["slot"][sel]), kind="stable")]
+        idx = np.flatnonzero(rows)[sel]  # position in the device batch
+        idx = np.concatenate([idx, np.zeros(-len(idx) % rng.BLOCK, idx.dtype)])  # few distinct lengths to compile
+        g = _gather_rows({k: v for k, v in dev.items() if k not in skip}, jnp.asarray(idx))
+        for v in g.values():
+            v.copy_to_host_async()
+        pending.append((g, n0 + sel))  # rows of the run's candidate arrays, in output order
+        n0 += len(s["prob"])
+        resident += sum(v.nbytes for v in g.values())
         if resident > max_device_bytes:
-            del kept
+            del pending
             res = finish(candidates(card_path, n_trials, seed, batch=batch, cap=cap, parent_sampler=parent_sampler),
                          weighted)
             return res | {"events_path": "host"}
-        small.append({k: out[k][rows] for k in PASS2_KEYS} | {"block": np.repeat(np.asarray(chunk), out["count"]),
-                                                              "flat": np.flatnonzero(rows)})  # row in the device batch
-        kept.append(big)
-    cat = {k: np.concatenate([s[k] for s in small]) for k in (*PASS2_KEYS, "block", "flat")} if small else {}
-    flat = cat.pop("flat", None)
+    cat = {k: np.concatenate([s[k] for s in small]) for k in (*PASS2_KEYS, "block")} if small else {}
     res = finish(_result(card_path, card, seed, ch, blocks, n_trials, batch, parent_sampler, stats, cat), weighted)
-    order, event = output.accepted_events(res)
-    # output order is (block, trial, slot), so each batch's accepted rows form one contiguous run of `order`
-    n_rows = np.cumsum([0] + [len(s["flat"]) for s in small])
-    bounds = np.cumsum([0] + [int(res["accepted_mask"][a:b].sum()) for a, b in zip(n_rows[:-1], n_rows[1:])])
-    pending = []
-    for big, a, b in zip(kept, bounds[:-1], bounds[1:]):
-        idx = flat[order[a:b]]
-        idx = np.concatenate([idx, np.zeros(-len(idx) % rng.BLOCK, idx.dtype)])  # few distinct lengths to compile
-        pending.append((_gather_rows(big, jnp.asarray(idx)), b - a))  # all dispatched before the first copy
-    gathered = [{k: v[:n] for k, v in g.items()} for g, n in zip(jax.device_get([g for g, _ in pending]),
-                                                                  [n for _, n in pending])]
+    gathered, order = [], []
+    for g, rows_sel in pending:
+        acc = res["accepted_mask"][rows_sel]
+        g = jax.device_get(g)
+        gathered.append({k: v[:len(rows_sel)] if acc.all() else v[:len(rows_sel)][acc] for k, v in g.items()})
+        order.append(rows_sel[acc])
+    order = np.concatenate(order) if order else np.zeros(0, int)
     rows_out = {k: np.concatenate([g[k] for g in gathered]) for k in gathered[0]} if gathered else {}
     if ch.kind == "brem" and gathered:
         rows_out["parent"] = rows_out["mediator"]
     rows_out |= {k: cat[k][order] for k in (*PASS2_KEYS, "block")} if small else {}
+    event = output.event_numbers(rows_out["block"], rows_out["trial"], weighted) if small else np.zeros(0, int)
     return res | {"candidates": rows_out, "accepted_mask": np.ones(len(order), bool), "output_order": True,
                   "event": event, "events_path": "device"}
 
