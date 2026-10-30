@@ -3,8 +3,8 @@
 of the functions that take the time. The write is timed into each of --out-dirs (for example shared scratch against node-local disk), and the
 file is deleted afterwards. Also reports the bytes copied from the device per batch and written per accepted row.
 
-Usage: profile_host.py <card> <n_trials> [--batch 256] [--cap 16384] [--events] [--out-dirs D ...] [--top 25]
-       [--json out.json]
+Usage: profile_host.py <card> <n_trials> [--batch 256] [--cap 16384] [--events [--stream]] [--out-dirs D ...]
+       [--top 25] [--json out.json]
 """
 import argparse
 import cProfile
@@ -52,17 +52,20 @@ def main():
     ap.add_argument("--out-dirs", type=Path, nargs="+", default=[Path("/tmp")])
     ap.add_argument("--top", type=int, default=25)
     ap.add_argument("--events", action="store_true", help="profile pipeline.events, not finish(candidates(...))")
+    ap.add_argument("--stream", action="store_true",
+                    help="with --events: events(stream=True), so the copies of the rows land in the first write")
     ap.add_argument("--json", type=Path)
     args = ap.parse_args()
     kw = {"batch": args.batch, "cap": args.cap}
     if args.events:
-        pass12 = lambda n: pipeline.events(args.card, n, **kw)  # noqa: E731
+        pass12 = lambda n: pipeline.events(args.card, n, stream=args.stream, **kw)  # noqa: E731
     else:
         pass12 = lambda n: pipeline.finish(pipeline.candidates(args.card, n, **kw))  # noqa: E731
     t = time.perf_counter()
     pass12(args.batch * rng.BLOCK)
     rep = {"card": str(args.card), "n_trials": args.n_trials, "batch": args.batch, "cap": args.cap,
-           "path": "events" if args.events else "candidates+finish", "device": jax.devices()[0].device_kind,
+           "path": ("events" + ("+stream" if args.stream else "")) if args.events else "candidates+finish",
+           "device": jax.devices()[0].device_kind,
            "warm_s": time.perf_counter() - t}
     total, per_key = batch_bytes(args.card, args.batch, args.cap)
     rep["device_get_bytes_per_batch"] = total
