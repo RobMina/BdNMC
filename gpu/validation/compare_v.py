@@ -8,7 +8,8 @@ Usage: compare_v.py [--config v_config.json] [--port-dir dir] [--json out.json] 
 (port shards in <port-dir>/<stem>/, default validation/out/v). A config's "unweighted_dirs" maps a point to its stock
 unweighted run directory when that is not phase0/out/ref/<stem>/O2. --stock-dir takes the stock electrons from
 another directory (a repeat reference) and --points runs a subset; V1 and the overall verdicts then cover only those
-points, so such a result is not a V1/V2 verdict of the config.
+points, so such a result is not a V1/V2 verdict of the config. A config's "stock_runs" moves the stock run directories
+(DEFAULT_RUNS), for example to split reference parts run on another machine.
 """
 import argparse
 import hashlib
@@ -27,23 +28,41 @@ sys.path.insert(0, str(ROOT / "src"))
 from bdnmc_jax import pipeline, rng, shards  # noqa: E402
 
 CONFIG = ROOT / "validation" / "v_config.json"
+# stock run directories (globs relative to gpu/, {stem} = point); a config's "stock_runs" overrides them and may give
+# "unweighted_parts" (base -> number of split parts, phase0/make_split_ref_cards.py) and "weighted_replicas"
+DEFAULT_RUNS = {"unweighted": "phase0/out/ref/{stem}/O2", "weighted": "phase0/out/ref_w/{stem}_r*/O2"}
 SE = re.compile(r"^Predicted number of signal events = (\S+)", re.M)
 ACC = re.compile(r" Events: (\S+) V_num: ", re.M)
+TRIALS = re.compile(r"^Number of trials = (\d+)", re.M)
 
 
 # --- V1 ------------------------------------------------------------------------------------------------------------
 
-def stock_unweighted(stem, run_dir=None):
-    text = (ROOT / (run_dir or f"phase0/out/ref/{stem}/O2") / "log.txt").read_text()
-    se = float(SE.search(text).group(1))
-    return se, se / math.sqrt(sum(float(x) for x in ACC.findall(text)))
+def run_logs(stem, pattern, expected=None):
+    logs = sorted(ROOT.glob(pattern.format(stem=stem) + "/log.txt"))
+    if expected is not None and len(logs) != expected:
+        raise ValueError(f"{stem}: {len(logs)} runs match {pattern}, expected {expected}")
+    return logs
 
 
-def stock_weighted(stem):
-    logs = sorted((ROOT / "phase0" / "out" / "ref_w").glob(f"{stem}_r*/O2/log.txt"))
+def stock_unweighted(logs):
+    """se of one unweighted run, or of split parts (each with its own seed and pMax): the trial-weighted mean of the
+    parts' se; sigma = se / sqrt(accepted events of all parts)."""
+    trials = se_trials = acc = 0.0
+    for p in logs:
+        text = p.read_text()
+        n = int(TRIALS.search(text).group(1))
+        trials += n
+        se_trials += n * float(SE.search(text).group(1))
+        acc += sum(float(x) for x in ACC.findall(text))
+    se = se_trials / trials
+    return se, se / math.sqrt(acc)
+
+
+def stock_weighted(logs):
     ses = [float(SE.search(p.read_text()).group(1)) for p in logs]
     if len(ses) < 2:
-        raise ValueError(f"{stem}: {len(ses)} weighted replicas")
+        raise ValueError(f"{len(ses)} weighted replicas")
     return statistics.fmean(ses), statistics.stdev(ses) / math.sqrt(len(ses)), len(ses)
 
 
@@ -123,6 +142,7 @@ def main():
     args = ap.parse_args()
     cfg = json.loads(args.config.read_text())
     v1c, v2c = cfg["V1"], cfg["V2"]
+    runs = DEFAULT_RUNS | cfg.get("stock_runs", {})
     points = args.points or cfg["points"]
     if not set(points) <= set(cfg["points"]):
         raise ValueError(f"points not in {args.config.name}: {sorted(set(points) - set(cfg['points']))}")
@@ -137,8 +157,12 @@ def main():
             raise ValueError(f"{stem}: shards cover {res['trials']} of {res['n_trials']} trials")
         p1 = port_v1(res) | {"backend": res.get("backend", "cpu"), "device": res.get("device"),
                              "wall_s": res.get("wall_s")}
-        sw, sw_sig, nrep = stock_weighted(stem)
-        su, su_sig = stock_unweighted(stem, cfg.get("unweighted_dirs", {}).get(stem))
+        base = stem.rsplit("_m", 1)[0]
+        sw, sw_sig, nrep = stock_weighted(run_logs(stem, runs["weighted"], runs.get("weighted_replicas")))
+        if stem in cfg.get("unweighted_dirs", {}):
+            su, su_sig = stock_unweighted([ROOT / cfg["unweighted_dirs"][stem] / "log.txt"])
+        else:
+            su, su_sig = stock_unweighted(run_logs(stem, runs["unweighted"], runs.get("unweighted_parts", {}).get(base, 1)))
         pull = (p1["se_weighted"] - sw) / math.hypot(p1["sigma_weighted"], sw_sig)
         pulls.append(pull)
         point = {"port": p1, "stock_weighted": [sw, sw_sig, nrep], "stock_unweighted": [su, su_sig],

@@ -2,6 +2,16 @@
  "_comment": "V1/V2 for off-shell pi0 decay (pi0 -> gamma V* -> gamma chi chi, m_V 0.2 GeV > m_pi0) on mb_offshell (Sanford-Wang, sphere) and he_offshell_cuboid (BMPT, cuboid). Thresholds, binning and variables copied unchanged from v_config.json (sha256 7058b254...); only the points differ. The stock reference runs use the laptop -O2 build, as for the other sets. Frozen 2026-10-29 before the first off-shell port-against-stock comparison. compare_v.py records this file sha256 in every result.",
  "copied_from": "v_config.json (sha256 7058b254019718dd6d98f269a6f212398abd7c57006f8b0e2e279aa971c0467a)",
  "frozen": "2026-10-29",
+ "amended": "2026-10-30, before any off-shell comparison. The stock references run on UVA standard nodes (one core per run) with the container build (gcc 14.2.0, Debian bookworm glibc 2.36; its V0 dump is within 1.8e-15 of the node gcc build and passes test_v0), not the laptop -O2 build named in the comment. The unweighted reference of each point is split into parts with their own seeds (phase0/make_split_ref_cards.py, cards/ref_s: mb 40 parts of 25,000 events, he 10 of 100,000; max_trials guard divided likewise), so every run takes about 10 min. V2 stock sample: the parts' electrons concatenated (validation/merge_stock_parts.py). Stock unweighted se (secondary V1, not a pass criterion): trial-weighted mean of the parts' se, sigma = se / sqrt(accepted events of all parts). Each part has its own 1000-DM burn-in, so the sample holds about N times as many post-burn-in pMax records (each accepted with probability 1) as one long run, expected a few hundred of 1e6 events for mb. The 8 weighted replicas per point are unchanged apart from the machine. Points, variables, binning and thresholds unchanged.",
+ "stock_runs": {
+  "unweighted": "phase0/out/ref_s/{stem}_p*/O2_uva",
+  "unweighted_parts": {
+   "mb_offshell": 40,
+   "he_offshell_cuboid": 10
+  },
+  "weighted": "phase0/out/ref_w/{stem}_r*/O2_uva",
+  "weighted_replicas": 8
+ },
  "points": [
   "mb_offshell_m001",
   "mb_offshell_m005",
