@@ -39,7 +39,8 @@ The same JAX, NumPy and SciPy versions are used on L1 and G1, so differences bet
 | OS | an EL8 Linux distribution, glibc 2.28 (its `libm` provides `pow`, `exp`, `sin` and the rest) |
 | C++ compiler | gcc 14.2.0 (cluster module, also needed at run time for its `libstdc++`), C++14 |
 | Stock build | in-tree build of `RobMina/BdNMC` `bf45d75` (no local changes), `-O2 -fPIC` |
-| Used for | the second stock reference at two eta points ([gpu-validation.md](gpu-validation.md)); stock timing on C1 is in [gpu-performance.md](gpu-performance.md#stock-bdnmc-on-a-linux-cluster-node-c1) |
+| Container stock build | the same source and flags, built and run with gcc 14.2.0 in a Debian bookworm container (glibc 2.36, `docker://gcc:14.2.0` under Apptainer) |
+| Used for | the second stock reference at two eta points with the node build ([gpu-validation.md](gpu-validation.md)); the off-shell stock references with the container build, split into parallel single-core runs; stock timing on C1 is in [gpu-performance.md](gpu-performance.md#stock-bdnmc-on-a-linux-cluster-node-c1) |
 
 A different compiler and standard library than L1 may give different events at the same seed; the sampled law is the
 same.

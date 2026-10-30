@@ -56,9 +56,22 @@ All runs were CPU-bound (99 % of a core). That is more than the hardware differe
   multiplications, whatever the optimisation flags. `libm` is precompiled and already picks its FMA/AVX2 code paths on
   this CPU, so stock's compiler flags do not change its cost either.
 
+**Three stock builds on one C1 node**, one after another, CPU time per trial (`mb_pi0_m005` 2e7 trials,
+`he_pi0_cuboid_m005` 2e6 trials, `output_mode summary`):
+
+| Build | `mb_pi0` | `he_pi0` |
+|---|---|---|
+| gcc 14.2.0, node glibc 2.28 | 8.43 µs | 36.0 µs |
+| Intel icpx `-fp-model=precise` (`libimf`) | 7.87 µs | 45.3 µs |
+| gcc 14.2.0 in a Debian bookworm container, glibc 2.36 | 4.97 µs | 25.6 µs |
+| L1 `-O2`, for comparison | 1.15 µs | 6.55 µs |
+
+- All three give the same `se` on both cards. Their V0 dumps pass `tests/test_v0.py`; against the gcc build, the Intel
+  dump differs by up to 4.1e-14 relative and the container dump by 1.8e-15 (`v0/compare_dumps.py`).
+- The container build is the fastest, 1.7x the node build, from glibc 2.36's faster `pow`, but still about 4x slower
+  per trial than L1. Stock reference runs on C1 use it.
+
 **Not tried yet:**
-- a stock build whose maths library is faster, such as the cluster's Intel compilers (`libimf`), or a container with a
-  newer glibc;
 - `-ffast-math`. It would at most skip `libm`'s error-handling wrappers. Its other effects on stock's results are not
   checked: it allows reordering floating-point arithmetic, assumes no NaN or infinity (stock can produce a NaN in
   `ThetaEe`) and flushes subnormal numbers to zero.
