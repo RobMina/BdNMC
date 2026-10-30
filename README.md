@@ -18,37 +18,18 @@ git submodule update --init --recursive   # BdNMC_LANL: required by the build
   with no argument it uses `parameter.dat`.
 - **Card paths:** relative to the directory you run it from.
 - **Run directory:** BdNMC runs from the repository root, where it finds `data/`.
-- **Sample card:** `parameter.dat` is a commented example that ends with the result to expect.
+- **Sample card:** `parameter.dat` is a commented example. The result it says to expect (284.31) is out of date;
+  see [docs/install-and-quickstart.md](docs/install-and-quickstart.md#build-and-run).
 
-The makefile sets no optimisation flag. For a faster build, see
-[docs/install-and-quickstart.md](docs/install-and-quickstart.md#stock-bdnmc-c).
+The makefile builds with `-O2`, 3-7x faster than the unoptimised build it used before. To rebuild a checkout
+built before that change, see [docs/install-and-quickstart.md](docs/install-and-quickstart.md#build-and-run).
 
 ## Documentation
 
 | Page | Content |
 |---|---|
-| [docs/install-and-quickstart.md](docs/install-and-quickstart.md) | building and running stock BdNMC; installing and running the GPU port |
+| [docs/install-and-quickstart.md](docs/install-and-quickstart.md) | building and running BdNMC |
 | [docs/parameter-card.md](docs/parameter-card.md) | every parameter-card option: keys, blocks, defaults, allowed values, parser behaviour |
-| [docs/gpu-validation.md](docs/gpu-validation.md) | how the GPU port is validated against stock BdNMC, and the results |
-| [docs/gpu-performance.md](docs/gpu-performance.md) | throughput of stock BdNMC and of the GPU port |
-| [docs/test-environments.md](docs/test-environments.md) | the hardware and software the tests ran on |
-
-## GPU port
-
-[`gpu/`](gpu) holds `bdnmc-jax`, a batched JAX port of part of BdNMC that runs on GPUs and CPUs. It reads the same
-parameter cards and is validated statistically against this code.
-
-**Implemented and validated:**
-- pi0 decay with Sanford-Wang or BMPT production;
-- proton bremsstrahlung (`V_decay` with `proton_brem`);
-- sphere and cuboid detectors;
-- `NCE_electron` scattering.
-
-**Output:** stock's text event format or HDF5.
-
-**Throughput:** on one NVIDIA A100, with HDF5 output, 109-500x one core of an optimised stock build on the pi0
-cards (depending on the card and the parent sampler), and 43-140x on the brem cards. See
-[gpu/README.md](gpu/README.md).
 
 ## Layout
 
@@ -62,4 +43,3 @@ cards (depending on the card and the parent sampler), and 43-140x on the brem ca
 | `parameter.dat` | sample parameter card |
 | `Parameter_Card_Generator.py` | helper that writes and runs modified cards |
 | `docs/` | documentation |
-| `gpu/` | JAX port |

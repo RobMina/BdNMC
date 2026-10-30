@@ -1,11 +1,9 @@
 # Parameter card reference
 
-Every option that stock BdNMC reads from a parameter card, compiled from the source (`src/`, upstream master
+Every option that BdNMC reads from a parameter card, compiled from the source (`src/`, upstream master
 `6cba825`). Source locations are given as `file:line` in `src/`.
 - **Inferred items:** anything not confirmed by reading the code to the end is marked *(inferred)*.
 - **Not inspected:** the `BdNMC_LANL` submodule (cross-section functions) was not checked for card reads.
-- **GPU port:** it reads the same cards but accepts only a subset; see
-  [install-and-quickstart.md](install-and-quickstart.md#what-the-port-accepts).
 
 ## Format
 
@@ -249,7 +247,7 @@ Defaults are set at `Parameter.cpp:150-169`.
 With `signal_channel Signal_Decay`, only `pi0_decay` and `eta_decay` (on-shell A' gamma), or any channel with
 `production_distribution proton_brem`, are accepted (`Kinetic_Mixing.cpp:87-131`).
 
-What the Dark_Photon brem channel does with `ptmin`/`ptmax`/`zmin`/`zmax` (found while porting it):
+What the Dark_Photon brem channel does with `ptmin`/`ptmax`/`zmin`/`zmax`:
 - `d2N_proton_brem_to_V(z, pt2)` is called with pT in its pT^2 argument, by both the rate integral
   (`V_prod_rate`, Simpson cubature over [`zmin`, `zmax`] x [`ptmin`, `ptmax`]) and the sampler. The sampler draws
   pT in [`ptmin`, `ptmax`] and uses it as pT in the V's momentum, but the density it weights by is evaluated as if
