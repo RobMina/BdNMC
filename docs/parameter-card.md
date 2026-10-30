@@ -67,7 +67,7 @@ mass 11.2593
 | `POT` | real | required | protons on target; scales every channel's DM count (`Vnum`) | `Parameter.cpp:376` |
 | `pi0_per_POT` | real | 0.9 | pi0 per proton on target; scales the meson channels | `Parameter.cpp:378` |
 | `samplesize` | integer | required | signal events to generate (in `output_mode particle_list`, lines to write). Parsed with `stoi`: `1e5` means **1** | `Parameter.cpp:379` |
-| `max_trials` | integer | -1 (no limit) | stop the main loop after this many trials; narrowed to `int` at `main.cpp:361` | `Parameter.cpp:438` |
+| `max_trials` | integer | -1 (no limit) | stop the main loop after this many trials; read as `long long`, then narrowed to `int` at `main.cpp:361`, so values of 2^31 or more wrap: 5e9 becomes 705,032,704 (seen in runs), and values from 2^31 to 2^32 - 1 become negative, which means no limit | `Parameter.cpp:438` |
 | `min_event` | real | -1 | skip burn-in if the expected DM count is below this; skip the run if pMax x `Vnum` <= this (`main.cpp:300,367`) | `Parameter.cpp:377` |
 | `burn_max` | integer | 1000 | burn-in scatters used to estimate the maximum scatter probability (pMax); negative means 1000; **0 skips burn-in, so an unweighted run is skipped** (`main.cpp:280-284,367`) | `Parameter.cpp:433` |
 | `burn_timeout` | integer | 20000 | burn-in gives up after `burn_max` x `burn_timeout` attempts (`main.cpp:316`) | `Parameter.cpp:434` |

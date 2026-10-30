@@ -13,7 +13,8 @@ BASES = {  # base card stem -> (samplesize, max_trials)
     "he_pi0_cuboid_m005": (1_000_000, 1_000_000_000),
     "mb_brem_m005": (1_000_000_000, 20_000_000),
     "he_brem_cuboid_m005": (1_000_000_000, 20_000_000),
-    # eta (added 2026-10-29; appended so the earlier cards keep their seeds): 3.2e-4 / 6.1e-3 accepted per trial
+    # eta (added 2026-10-29; appended so the earlier cards keep their seeds): 3.2e-4 / 6.1e-3 accepted per trial.
+    # Stock narrows max_trials to int, so mb_eta's 5e9 wraps to 705,032,704: those runs stop there (about 2.3e5 events)
     "mb_eta_m005": (1_000_000, 5_000_000_000),
     "he_eta_cuboid_m005": (1_000_000, 1_000_000_000),
     # particle_list (added 2026-10-29; base cards and lists from make_lists.py): 8.5e-4 / 1.3e-2 accepted per trial

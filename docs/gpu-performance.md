@@ -35,6 +35,38 @@ whole-node figures are not measured.
   (about 1 GB resident for 1.7 M events).
 - Speed-ups below are quoted against both builds: `-O0` is how BdNMC is built as shipped.
 
+## Stock BdNMC on a Linux cluster node (C1)
+
+One core of C1 runs stock 3-8x slower than one core of L1, in CPU time per trial:
+
+| Card | Trials | L1 `-O2` | C1 `-O2` | C1 / L1 |
+|---|---|---|---|---|
+| `mb_pi0_m005` (Sanford-Wang) | 2e7 | 1.15 µs (23.0 s) | 9.21 µs (184.2 s) | 8.0x |
+| `mb_eta_m005` (K0 Sanford-Wang) | 7.05e8 | 1.10 µs | 4.37 µs | 4.0x |
+| `he_eta_cuboid_m005` (BMPT kaon) | 1.7e8 | 7.45 µs | 22.3 µs | 3.0x |
+
+All runs were CPU-bound (99 % of a core). That is more than the hardware difference between the two cores accounts for.
+
+**Where the time goes on C1** (`valgrind --tool=callgrind`, `mb_pi0_m005`):
+- `pow` from glibc 2.28's `libm` takes 59 % of all instructions, about 230 instructions per call. `libm` as a whole
+  takes about 70 %.
+- The calls come from `sanfordwang::swpip` and `swpim`. The Sanford-Wang density calls `pow` about 8 times per
+  evaluation, and the sampler evaluates it about 14 times per accepted parent, so a trial makes about 115 `pow` calls.
+- The exponents are fit parameters held at run time, so the compiler cannot replace these calls with
+  multiplications, whatever the optimisation flags. `libm` is precompiled and already picks its FMA/AVX2 code paths on
+  this CPU, so stock's compiler flags do not change its cost either.
+
+**Not tried yet:**
+- a stock build whose maths library is faster, such as the cluster's Intel compilers (`libimf`), or a container with a
+  newer glibc;
+- `-ffast-math`. It would at most skip `libm`'s error-handling wrappers. Its other effects on stock's results are not
+  checked: it allows reordering floating-point arithmetic, assumes no NaN or infinity (stock can produce a NaN in
+  `ThetaEe`) and flushes subnormal numbers to zero.
+- the same profile on L1, where callgrind does not run, so the per-call cost of `pow` there is not measured.
+
+The port does not call `libm` (its maths runs in XLA), so none of this affects the port's throughput. Every speed-up on
+this page is against L1, the faster stock baseline.
+
 ## JAX port
 
 Measured with `gpu/validation/bench.py` on the 5 MeV reference cards (`phase0/cards/ref/*_m005.dat`).

@@ -31,6 +31,19 @@ pages names its environment by the label used here.
 The same JAX, NumPy and SciPy versions are used on L1 and G1, so differences between them come from the backend
 (XLA CPU against XLA CUDA), not from the library versions.
 
+## C1: CPU node of the same cluster (stock builds)
+
+| Item | Value |
+|---|---|
+| CPU | Intel Xeon Gold 6248 (x86-64, AVX-512), 3.2 GHz during the runs; one core per job, nodes shared with other jobs |
+| OS | an EL8 Linux distribution, glibc 2.28 (its `libm` provides `pow`, `exp`, `sin` and the rest) |
+| C++ compiler | gcc 14.2.0 (cluster module, also needed at run time for its `libstdc++`), C++14 |
+| Stock build | in-tree build of `RobMina/BdNMC` `bf45d75` (no local changes), `-O2 -fPIC` |
+| Used for | the second stock reference at two eta points ([gpu-validation.md](gpu-validation.md)); stock timing on C1 is in [gpu-performance.md](gpu-performance.md#stock-bdnmc-on-a-linux-cluster-node-c1) |
+
+A different compiler and standard library than L1 may give different events at the same seed; the sampled law is the
+same.
+
 ## Not yet run
 
 - A MIG slice of an A100 (P1 asks for one figure there).
