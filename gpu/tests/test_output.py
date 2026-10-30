@@ -126,3 +126,18 @@ def test_device_event_path_matches_the_host_path(card, weighted):
         c = ev["candidates"]
         for k in host["candidates"]:
             assert np.array_equal(np.asarray(c[k])[r2], host["candidates"][k][rows]), k
+
+
+@pytest.mark.parametrize("card", [CARD, ROOT / "phase0" / "cards" / "ref" / "mb_brem_m020.dat"])
+def test_hdf5_is_the_same_from_both_paths(card, tmp_path):
+    h5py = pytest.importorskip("h5py")
+    kw = {"seed": 7, "batch": 1, "cap": 1024}
+    output.write_hdf5(pipeline.finish(pipeline.candidates(card, 2 * rng.BLOCK, **kw)), tmp_path / "host.h5")
+    output.write_hdf5(pipeline.events(card, 2 * rng.BLOCK, **kw), tmp_path / "device.h5")
+    with h5py.File(tmp_path / "host.h5") as a, h5py.File(tmp_path / "device.h5") as b:
+        assert set(a["accepted"]) == set(b["accepted"])
+        for k in a["accepted"]:
+            assert np.array_equal(a["accepted"][k][()], b["accepted"][k][()]), k
+        assert set(a.attrs) == set(b.attrs)
+        for k in a.attrs:
+            assert np.array_equal(a.attrs[k], b.attrs[k]), k

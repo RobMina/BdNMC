@@ -10,6 +10,7 @@ Pass 1 (`block`, jitted) handles BLOCK trials and keeps only the DM that reach t
 their recoil electron, interaction point and acceptance uniform already drawn. Pass 2 (`run`) takes the global
 maximum and accepts. Weighted mode is the same pass 1 with every candidate kept, weight = its probability.
 """
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import lru_cache, partial
 
@@ -297,19 +298,29 @@ def _pass1(card_path, n_trials, seed, blocks, batch, cap, parent_sampler, host_k
         return blocks_batch(det, sc, ch, card.e_density, seed, 0, jnp.asarray(bi), jnp.asarray(nv), cap)
 
     def gen():
+        # The next batch is dispatched from a worker thread: the samplers' data-dependent loops make a dispatch wait
+        # for much of the batch's device time, which then overlaps the host's copy and checks of the current batch.
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
+            yield from batches(pool)
+        finally:
+            pool.shutdown(wait=True)
+
+    def batches(pool):
         cap = stats["cap"]
-        pending = launch(chunks[0], cap) if chunks else None
+        pending = pool.submit(launch, chunks[0], cap) if chunks else None
         for i, chunk in enumerate(chunks):
-            dev, used_cap = pending, cap
+            dev, used_cap = pending.result(), cap
             if i + 1 < len(chunks):
-                pending = launch(chunks[i + 1], cap)  # dispatched before this batch is copied and checked (async)
+                pending = pool.submit(launch, chunks[i + 1], cap)
             while np.asarray(dev["count"])[: len(chunk)].max() > used_cap:
                 used_cap *= 2
                 dev = launch(chunk, used_cap)
             if used_cap > cap:
                 cap = stats["cap"] = used_cap
                 if i + 1 < len(chunks):
-                    pending = launch(chunks[i + 1], cap)
+                    pending.result()
+                    pending = pool.submit(launch, chunks[i + 1], cap)
             keys = CHECK_KEYS + (CANDIDATE_KEYS if host_keys is None else host_keys)
             nb = len(chunk)
             out = jax.tree.map(lambda x: x[:nb], jax.device_get({k: dev[k] for k in keys if k in dev}))

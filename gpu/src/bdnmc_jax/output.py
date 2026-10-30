@@ -147,8 +147,10 @@ def write_hdf5(res, path, extra_attrs=None):
         g = f.create_group("accepted")
         g["event"] = event
         g["weight"] = row_weights(res, rows)
-        for k in ("block", "trial", "slot", "prob", "L", "dm", "electron", "recoil_dm", "vertex", "parent", "mediator",
+        for k in ("block", "trial", "slot", "prob", "L", "dm", "electron", "recoil_dm", "vertex", "mediator", "parent",
                   "crossing", "origin", "med_mass"):
-            if k in c:
+            if k == "parent" and c.get("parent") is c.get("mediator") and "mediator" in g:
+                g["parent"] = g["mediator"]  # brem from pipeline.events: the parent is the V; a hard link
+            elif k in c:
                 g[k] = np.asarray(c[k]) if res.get("output_order") else np.asarray(c[k])[rows]
     return len(rows)
