@@ -1,6 +1,7 @@
 """V0: the port against stock C++ function values (v0/v0_dump.txt, written by v0/v0_dump.cpp)."""
 from collections import defaultdict
 import math
+import os
 from pathlib import Path
 
 import jax.numpy as jnp
@@ -11,7 +12,8 @@ import bdnmc_jax  # noqa: F401
 from bdnmc_jax import branching, brem, detector, electron, offshell, parents
 from bdnmc_jax.constants import MASS_ELECTRON as Me
 
-DUMP = Path(__file__).resolve().parents[1] / "v0" / "v0_dump.txt"
+DUMP = Path(os.environ.get("BDNMC_V0_DUMP", Path(__file__).resolve().parents[1] / "v0" / "v0_dump.txt"))  # override:
+# another stock build's dump
 REL = 1e-12  # closed-form functions
 LDET_ABS = 1e-9  # metres
 M, MV, KAP, ALD = 0.005, 0.1, 1e-3, 0.1

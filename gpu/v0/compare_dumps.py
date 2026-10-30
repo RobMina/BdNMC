@@ -31,6 +31,8 @@ def main():
     worst_all = 0.0
     for name in common:
         x, y = a[name], b[name]
+        if x.ndim < 2 or x.shape[1] == 0:  # a marker line with no values
+            continue
         if x.shape != y.shape:
             print(f"{name}: shapes differ {x.shape} vs {y.shape}")
             continue
