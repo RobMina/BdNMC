@@ -44,6 +44,21 @@ CHANNEL_NAME = {"V_decay": "Dark_Bremsstrahlung", "Brem_V": "Dark_Bremsstrahlung
 FORMAT = "bdnmc-jax-events/1"
 
 
+def collect(res):
+    """A `pipeline.events(..., stream=True)` result with its per-batch device rows copied to the host and joined into
+    `candidates`; other results unchanged."""
+    if "device_rows" not in res:
+        return res
+    c = dict(res["candidates"])
+    chunks = res["device_rows"]
+    if chunks:
+        for k in chunks[0][0]:
+            c[k] = np.concatenate([np.asarray(d[k])[:n] for d, n in chunks])
+        if res.get("parent_is_mediator"):
+            c["parent"] = c["mediator"]  # a brem event's parent is its V
+    return {k: v for k, v in res.items() if k != "device_rows"} | {"candidates": c}
+
+
 def accepted_events(res):
     """(row indices into res["candidates"] in output order, event number per row, starting at 1). A result of
     `pipeline.events` already holds only the accepted rows, in output order."""
@@ -84,6 +99,7 @@ def _model_report(card, fmt):
 def write_text(res, path, summary_path=None, run=None):
     """Write the accepted events in stock's comprehensive format to `path`; append stock's summary lines to
     `summary_path` if given. Returns the number of events written."""
+    res = collect(res)
     card = cardmod.parse_card(res["card"])
     run = run or card.keymap.get("run") or str(int(time.time()))
     chan = card.channels[0]
@@ -131,9 +147,11 @@ def write_text(res, path, summary_path=None, run=None):
 
 def write_hdf5(res, path, extra_attrs=None):
     """Write the accepted DM rows to an HDF5 file (group `accepted`, one row per DM) with the run's settings as
-    attributes. Needs h5py (`pip install h5py`). Returns the number of rows written."""
+    attributes. Needs h5py (`pip install h5py`). Returns the number of rows written. A streamed `pipeline.events`
+    result is written batch by batch as each batch's copy from the device arrives."""
     import h5py
     c = res["candidates"]
+    chunks = res.get("device_rows") or []
     rows, event = accepted_events(res)
     card_text = Path(res["card"]).read_text()
     with h5py.File(path, "w") as f:
@@ -147,10 +165,17 @@ def write_hdf5(res, path, extra_attrs=None):
         g = f.create_group("accepted")
         g["event"] = event
         g["weight"] = row_weights(res, rows)
+        streamed = {k: g.create_dataset(k, (len(rows),) + v.shape[1:], v.dtype) for k, v in
+                    (chunks[0][0].items() if chunks else ())}
         for k in ("block", "trial", "slot", "prob", "L", "dm", "electron", "recoil_dm", "vertex", "mediator", "parent",
                   "crossing", "origin", "med_mass"):
-            if k == "parent" and c.get("parent") is c.get("mediator") and "mediator" in g:
+            if k == "parent" and res.get("parent_is_mediator") and "mediator" in g:
                 g["parent"] = g["mediator"]  # brem from pipeline.events: the parent is the V; a hard link
-            elif k in c:
+            elif k in c and k not in streamed:
                 g[k] = np.asarray(c[k]) if res.get("output_order") else np.asarray(c[k])[rows]
+        a = 0
+        for d, n in chunks:
+            for k, v in d.items():
+                streamed[k][a:a + n] = np.asarray(v)[:n]  # waits for this array's copy only
+            a += n
     return len(rows)

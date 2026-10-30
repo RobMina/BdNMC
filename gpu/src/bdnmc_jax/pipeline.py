@@ -388,13 +388,16 @@ def _gather_rows(out, idx):
 
 
 def events(card_path, n_trials, seed=None, weighted=False, batch=8, cap=1024, parent_sampler="stock",
-           max_device_bytes=None):
+           max_device_bytes=None, stream=False):
     """Pass 1 and pass 2 for event output: the same result and accepted events as `finish(candidates(...))`, but
     the candidates' large fields stay on the device until pass 2 has chosen the accepted rows, which are then
     gathered there in output order; only they and the pass-2 fields are copied to the host. `candidates` in the
     result holds the accepted rows in output order (`output_order` True, event numbers in `event`). If the
     device-resident batches would exceed `max_device_bytes` (default: half the device memory, or 8 GB when the
-    backend does not report it), the run is redone through `candidates` instead, with the same result."""
+    backend does not report it), the run is redone through `candidates` instead, with the same result.
+    With `stream`, the large fields are returned per batch as device arrays whose copies to the host have started
+    (`device_rows`: a list of (dict, rows)), for `output.write_hdf5` to write each batch as it arrives;
+    `output.collect` joins them on the host."""
     if max_device_bytes is None:
         limit = (jax.devices()[0].memory_stats() or {}).get("bytes_limit")
         max_device_bytes = limit // 2 if limit else 8 << 30
@@ -426,15 +429,15 @@ def events(card_path, n_trials, seed=None, weighted=False, batch=8, cap=1024, pa
     for big, a, b in zip(kept, bounds[:-1], bounds[1:]):
         idx = flat[order[a:b]]
         idx = np.concatenate([idx, np.zeros(-len(idx) % rng.BLOCK, idx.dtype)])  # few distinct lengths to compile
-        pending.append((_gather_rows(big, jnp.asarray(idx)), b - a))  # all dispatched before the first copy
-    gathered = [{k: v[:n] for k, v in g.items()} for g, n in zip(jax.device_get([g for g, _ in pending]),
-                                                                  [n for _, n in pending])]
-    rows_out = {k: np.concatenate([g[k] for g in gathered]) for k in gathered[0]} if gathered else {}
-    if ch.kind == "brem" and gathered:
-        rows_out["parent"] = rows_out["mediator"]
-    rows_out |= {k: cat[k][order] for k in (*PASS2_KEYS, "block")} if small else {}
-    return res | {"candidates": rows_out, "accepted_mask": np.ones(len(order), bool), "output_order": True,
-                  "event": event, "events_path": "device"}
+        rows_dev = _gather_rows(big, jnp.asarray(idx))
+        for v in rows_dev.values():
+            v.copy_to_host_async()  # every copy queued before the first is needed
+        pending.append((rows_dev, b - a))
+    del kept
+    res = res | {"candidates": {k: cat[k][order] for k in (*PASS2_KEYS, "block")} if small else {},
+                 "accepted_mask": np.ones(len(order), bool), "output_order": True, "event": event,
+                 "events_path": "device", "device_rows": pending, "parent_is_mediator": ch.kind == "brem"}
+    return res if stream else output.collect(res)
 
 
 def merge(shards):

@@ -117,6 +117,7 @@ def test_device_event_path_matches_the_host_path(card, weighted):
     host = pipeline.finish(pipeline.candidates(card, 3 * rng.BLOCK, **kw), weighted)
     rows, event = output.accepted_events(host)
     for ev in (pipeline.events(card, 3 * rng.BLOCK, weighted=weighted, **kw),
+               output.collect(pipeline.events(card, 3 * rng.BLOCK, weighted=weighted, stream=True, **kw)),
                pipeline.events(card, 3 * rng.BLOCK, weighted=weighted, max_device_bytes=1, **kw)):
         assert ev["events_path"] in ("device", "host")
         for k in ("se", "se_weighted", "pmax", "accepted", "n_hits", "prob_sum"):
@@ -134,10 +135,12 @@ def test_hdf5_is_the_same_from_both_paths(card, tmp_path):
     kw = {"seed": 7, "batch": 1, "cap": 1024}
     output.write_hdf5(pipeline.finish(pipeline.candidates(card, 2 * rng.BLOCK, **kw)), tmp_path / "host.h5")
     output.write_hdf5(pipeline.events(card, 2 * rng.BLOCK, **kw), tmp_path / "device.h5")
-    with h5py.File(tmp_path / "host.h5") as a, h5py.File(tmp_path / "device.h5") as b:
-        assert set(a["accepted"]) == set(b["accepted"])
-        for k in a["accepted"]:
-            assert np.array_equal(a["accepted"][k][()], b["accepted"][k][()]), k
-        assert set(a.attrs) == set(b.attrs)
-        for k in a.attrs:
-            assert np.array_equal(a.attrs[k], b.attrs[k]), k
+    output.write_hdf5(pipeline.events(card, 2 * rng.BLOCK, stream=True, **kw), tmp_path / "stream.h5")
+    for other in ("device.h5", "stream.h5"):
+        with h5py.File(tmp_path / "host.h5") as a, h5py.File(tmp_path / other) as b:
+            assert set(a["accepted"]) == set(b["accepted"]), other
+            for k in a["accepted"]:
+                assert np.array_equal(a["accepted"][k][()], b["accepted"][k][()]), (other, k)
+            assert set(a.attrs) == set(b.attrs)
+            for k in a.attrs:
+                assert np.array_equal(a.attrs[k], b.attrs[k]), (other, k)
