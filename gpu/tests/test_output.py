@@ -111,9 +111,11 @@ def test_event_order_is_block_trial_slot(run):
 
 @pytest.mark.parametrize("card", [CARD, ROOT / "phase0" / "cards" / "ref" / "mb_brem_m020.dat"])
 @pytest.mark.parametrize("weighted", [False, True])
-def test_device_event_path_matches_the_host_path(card, weighted):
-    # several batches (batch 1), and the forced fallback through candidates()
-    kw = {"seed": 7, "batch": 1, "cap": 1024}
+@pytest.mark.parametrize("batch", [1, 2])
+def test_device_event_path_matches_the_host_path(card, weighted, batch):
+    # several batches (batch 1; batch 2 ends with a padded batch of one real block), and the forced fallback through
+    # candidates()
+    kw = {"seed": 7, "batch": batch, "cap": 1024}
     host = pipeline.finish(pipeline.candidates(card, 3 * rng.BLOCK, **kw), weighted)
     rows, event = output.accepted_events(host)
     for ev in (pipeline.events(card, 3 * rng.BLOCK, weighted=weighted, **kw),

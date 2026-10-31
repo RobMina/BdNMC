@@ -42,6 +42,8 @@ from .constants import MASS_ELECTRON, MASS_ETA, MASS_PION_NEUTRAL
 PARENT = {"pi0_decay": ("pion", MASS_PION_NEUTRAL), "eta_decay": ("eta", MASS_ETA), "V_decay": None, "Brem_V": None}
 CHANNEL_NAME = {"V_decay": "Dark_Bremsstrahlung", "Brem_V": "Dark_Bremsstrahlung"}
 FORMAT = "bdnmc-jax-events/1"
+HDF5_KEYS = ("block", "trial", "slot", "prob", "L", "dm", "electron", "recoil_dm", "vertex", "mediator", "parent",
+             "crossing", "origin", "med_mass")  # written per accepted DM, after event and weight
 
 
 def collect(res):
@@ -51,12 +53,12 @@ def collect(res):
         return res
     c = dict(res["candidates"])
     chunks = res["device_rows"]
-    if chunks:
-        for k in chunks[0][0]:
-            c[k] = np.concatenate([np.asarray(d[k])[:n] for d, n in chunks])
-        if res.get("parent_is_mediator"):
-            c["parent"] = c["mediator"]  # a brem event's parent is its V
-    return {k: v for k, v in res.items() if k != "device_rows"} | {"candidates": c}
+    for k in (chunks[0][0] if chunks else ()):
+        c[k] = np.concatenate([np.asarray(d[k])[:n] for d, n in chunks])
+    if chunks and res.get("parent_is_mediator"):
+        c["parent"] = c["mediator"]  # a brem event's parent is its V
+    event = c.pop("event", np.zeros(0, np.int64)).astype(np.int64)
+    return {k: v for k, v in res.items() if k != "device_rows"} | {"candidates": c, "event": event}
 
 
 def accepted_events(res):
@@ -77,9 +79,14 @@ def accepted_events(res):
 
 def row_weights(res, rows):
     """Weight per accepted DM; the weights sum to the run's predicted signal events (res["se"])."""
+    return _weights(res, res["candidates"]["prob"][rows] if res.get("weighted") else None, len(rows), len(rows))
+
+
+def _weights(res, prob, n, total):
+    """n weights; unweighted, each is se / total (total: the accepted rows of the whole run)."""
     if res.get("weighted"):
-        return res["candidates"]["prob"][rows] / res["trials"] * res["vnum"] * res["efficiency"]
-    return np.full(len(rows), res["se"] / max(len(rows), 1))
+        return prob / res["trials"] * res["vnum"] * res["efficiency"]
+    return np.full(n, res["se"] / max(total, 1))
 
 
 def _g10(x):
@@ -151,8 +158,8 @@ def write_hdf5(res, path, extra_attrs=None):
     result is written batch by batch as each batch's copy from the device arrives."""
     import h5py
     c = res["candidates"]
-    chunks = res.get("device_rows") or []
-    rows, event = accepted_events(res)
+    stream = "device_rows" in res
+    rows, event = (None, None) if stream else accepted_events(res)
     card_text = Path(res["card"]).read_text()
     with h5py.File(path, "w") as f:
         attrs = {"format": FORMAT, "card": card_text, "card_path": str(res["card"]), "seed": res["seed"],
@@ -163,19 +170,32 @@ def write_hdf5(res, path, extra_attrs=None):
         for k, v in (attrs | (extra_attrs or {})).items():
             f.attrs[k] = v
         g = f.create_group("accepted")
+        if stream:
+            return _write_streamed(g, res)
         g["event"] = event
         g["weight"] = row_weights(res, rows)
-        streamed = {k: g.create_dataset(k, (len(rows),) + v.shape[1:], v.dtype) for k, v in
-                    (chunks[0][0].items() if chunks else ())}
-        for k in ("block", "trial", "slot", "prob", "L", "dm", "electron", "recoil_dm", "vertex", "mediator", "parent",
-                  "crossing", "origin", "med_mass"):
+        for k in HDF5_KEYS:
             if k == "parent" and res.get("parent_is_mediator") and "mediator" in g:
                 g["parent"] = g["mediator"]  # brem from pipeline.events: the parent is the V; a hard link
-            elif k in c and k not in streamed:
+            elif k in c:
                 g[k] = np.asarray(c[k]) if res.get("output_order") else np.asarray(c[k])[rows]
-        a = 0
-        for d, n in chunks:
-            for k, v in d.items():
-                streamed[k][a:a + n] = np.asarray(v)[:n]  # waits for this array's copy only
-            a += n
     return len(rows)
+
+
+def _write_streamed(g, res):
+    """write_hdf5's rows for a streamed `pipeline.events` result, batch by batch as each batch's copy arrives."""
+    chunks, n_rows = res["device_rows"], res["accepted"]
+    keys = [k for k in HDF5_KEYS if chunks and k in chunks[0][0]]
+    ds, a = {}, 0
+    for d, n in chunks:
+        part = {k: np.asarray(d[k])[:n] for k in keys}  # waits for these arrays' copies only
+        part = {"event": np.asarray(d["event"])[:n].astype(np.int64),
+                "weight": _weights(res, part["prob"], n, n_rows)} | part
+        for k, v in part.items():
+            if k not in ds:
+                ds[k] = g.create_dataset(k, (n_rows,) + v.shape[1:], v.dtype)
+            ds[k][a:a + n] = v
+        a += n
+    if res.get("parent_is_mediator") and "mediator" in g:
+        g["parent"] = g["mediator"]  # a brem event's parent is its V; a hard link
+    return n_rows
