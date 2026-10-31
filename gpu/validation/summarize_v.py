@@ -1,7 +1,7 @@
 """One line per result file of compare_v.py or compare_precision.py: the V1 and V2 verdicts and statistics; with
 --points, one line per point as well (pull, and for a precision result the relative se difference, the fraction of
 electrons at theta_e = 0, and the smallest V2 p-value).
-Usage: summarize_v.py result.json [...] [--points [--hists]]
+Usage: summarize_v.py result.json [...] [--points [--hists] [--tails]]
 """
 import argparse
 import json
@@ -13,6 +13,7 @@ def main():
     ap.add_argument("files", type=Path, nargs="+")
     ap.add_argument("--points", action="store_true")
     ap.add_argument("--hists", action="store_true", help="with --points: every V2 histogram's p-value")
+    ap.add_argument("--tails", action="store_true", help="with --points: every tail test's pull")
     args = ap.parse_args()
     for f in args.files:
         d = json.loads(f.read_text())
@@ -36,6 +37,8 @@ def main():
             if args.hists:
                 print("        " + "  ".join(f"{k} {h['p']:.1e}" if "p" in h else f"{k} {h['fail']}"
                                              for k, h in p["V2"].items()))
+            if args.tails:
+                print("        tails: " + "  ".join(f"{k} {t['pull']:+.2f}" for k, t in p.get("tails", {}).items()))
 
 
 if __name__ == "__main__":

@@ -5,7 +5,8 @@ accepted events is timed and included in the end-to-end rate; the file is delete
 `pipeline.events` (accepted rows gathered on the device) with `stream` (the write takes each batch as its copy
 arrives, so the copies are timed in the write), unless --no-stream or --host-path (`finish(candidates(...))`).
 
-Usage: bench.py <card> <n_trials> [--batch 1 4 16] [--cap C] [--write none|hdf5|text] [--host-path] [--no-stream]
+Usage: bench.py <card> <n_trials> [--batch 1 4 16] [--cap C] [--write none|hdf5|text] [--weighted] [--host-path]
+       [--no-stream]
        [--out-dir D] [--json out.json]
 """
 import argparse
@@ -45,6 +46,8 @@ def main():
     ap.add_argument("--write", choices=["none", "hdf5", "text"], default="none",
                     help="also write the accepted events (to --out-dir) and include the write in the end-to-end rate")
     ap.add_argument("--host-path", action="store_true", help="write through finish(candidates(...)), not events()")
+    ap.add_argument("--weighted", action="store_true",
+                    help="weighted events (every DM passing the angle cuts, with its weight; option B), not unweighted")
     ap.add_argument("--no-stream", action="store_true",
                     help="events() joins the rows on the host before the write, rather than the write taking each "
                          "batch as its copy arrives")
@@ -56,9 +59,11 @@ def main():
 
     def generate(n, b, cap):
         if device_path:
-            return pipeline.events(args.card, n, batch=b, cap=cap, stream=not args.no_stream, **kw)
-        return pipeline.finish(pipeline.candidates(args.card, n, batch=b, cap=cap, **kw))
+            return pipeline.events(args.card, n, weighted=args.weighted, batch=b, cap=cap, stream=not args.no_stream,
+                                   **kw)
+        return pipeline.finish(pipeline.candidates(args.card, n, batch=b, cap=cap, **kw), args.weighted)
     out = {"card": str(args.card), "n_trials": args.n_trials, "parent_sampler": args.parent_sampler,
+           "weighted": args.weighted,
            "path": ("events" + ("" if args.no_stream else "+stream")) if device_path else "candidates+finish",
            "backend": jax.default_backend(),
            "device": jax.devices()[0].device_kind, "jax": jax.__version__, "runs": []}
