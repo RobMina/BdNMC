@@ -57,10 +57,28 @@ def lorentz(p4, beta, bx, by, bz):
 
 def lorentz_to(p4, parent, m_parent):
     """Particle::Lorentz(Particle& parent): boost p4 by the parent's velocity."""
+    if parent.dtype == jnp.float32:
+        return _boost_by_momentum(p4, parent, m_parent)
     gamma = parent[..., 0] / m_parent
     beta = jnp.sqrt(1.0 - 1.0 / gamma / gamma)
     E = parent[..., 0]
     return lorentz(p4, beta, parent[..., 1] / E, parent[..., 2] / E, parent[..., 3] / E)
+
+
+def _boost_by_momentum(p4, parent, m):
+    """lorentz_to's boost for float32, from the parent's four-momentum: gamma = E/m, gamma beta = |p|/m and
+    gamma - 1 = |p|^2 / (m (E + m)). Stock's route through beta = sqrt(1 - 1/gamma^2) and back to
+    1/sqrt(1 - beta^2) loses about 2 eps gamma^2 of gamma, several % at gamma ~ 700 in float32."""
+    E, P = parent[..., 0], parent[..., 1:]
+    pm = jnp.sqrt(jnp.sum(P * P, axis=-1))
+    at_rest = pm == 0
+    n = P / jnp.where(at_rest, 1.0, pm)[..., None]
+    e, p = p4[..., 0], p4[..., 1:]
+    n_p = jnp.sum(n * p, axis=-1)
+    gamma_beta, g1 = pm / m, pm * pm / (m * (E + m))
+    out = jnp.concatenate([(E / m * e + gamma_beta * n_p)[..., None], p + (g1 * n_p + gamma_beta * e)[..., None] * n],
+                          axis=-1)
+    return jnp.where(at_rest[..., None], p4, out)
 
 
 def rotate_y(p4, t):

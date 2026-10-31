@@ -34,6 +34,23 @@ def test_float32_run_is_float32_and_finite(tmp_path):
     assert out["accepted"] > 0 and np.isfinite(out["se"]) and out["se"] > 0
 
 
+def test_float32_boost_is_stocks_boost():
+    # the float32 route through the parent's four-momentum is the same boost as stock's (both evaluated in float64)
+    import jax.numpy as jnp
+    from bdnmc_jax import kinematics
+    rs = np.random.default_rng(3)
+    m = 0.135
+    gamma = np.exp(rs.uniform(np.log(1.01), np.log(1000.0), 500))
+    d = rs.normal(size=(500, 3))
+    pm = m * np.sqrt(gamma ** 2 - 1)
+    parent = np.c_[gamma * m, pm[:, None] * d / np.linalg.norm(d, axis=1, keepdims=True)]
+    q = rs.normal(size=(500, 3)) * 0.05
+    p4 = np.c_[np.sqrt(0.01 ** 2 + (q * q).sum(1)), q]
+    ref = np.asarray(kinematics.lorentz_to(jnp.asarray(p4), jnp.asarray(parent), m))
+    new = np.asarray(kinematics._boost_by_momentum(jnp.asarray(p4), jnp.asarray(parent), m))
+    np.testing.assert_allclose(new, ref, rtol=1e-9, atol=1e-12)
+
+
 def test_unknown_precision_is_refused(tmp_path):
     env = os.environ | {"BDNMC_JAX_PRECISION": "float16"}
     r = subprocess.run([sys.executable, "-c", "import bdnmc_jax"], env=env, capture_output=True, text=True,
