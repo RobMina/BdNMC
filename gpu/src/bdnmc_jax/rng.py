@@ -10,6 +10,9 @@ import jax
 import jax.numpy as jnp
 
 BLOCK = 1 << 16  # trials per reproducibility unit; changing it changes every random stream
+# Device dtypes: float64/int64, or float32/int32 with BDNMC_JAX_PRECISION=float32 (see the package docstring).
+FLOAT = jax.dtypes.canonicalize_dtype(jnp.float64)
+INT = jax.dtypes.canonicalize_dtype(jnp.int64)
 
 # Stage ids (fold_in constants); new stages get new ids, existing ids never change meaning.
 CHANNEL, PARENT, PARENT_PHI, DECAY, ACCEPT, RECOIL, RECOIL_PHI, POSITION, OFFSHELL = range(9)
@@ -21,8 +24,8 @@ def block_key(seed, channel, block):
 
 
 def uniform(key, stage, shape):
-    """U[0, 1) float64 for one stage of one block."""
-    return jax.random.uniform(jax.random.fold_in(key, stage), shape, dtype=jnp.float64)
+    """U[0, 1) (FLOAT) for one stage of one block."""
+    return jax.random.uniform(jax.random.fold_in(key, stage), shape, dtype=FLOAT)
 
 
 @partial(jax.jit, static_argnames=("propose", "n", "pool", "max_rounds"))
@@ -44,7 +47,7 @@ def rejection(key, propose, fmax, n, pool, max_rounds=10_000, params=None):
         out, filled, nprop, nover, r = state
         kr = jax.random.fold_in(key, r)
         x, f = propose(jax.random.fold_in(kr, 0), pool, *(() if params is None else (params,)))
-        u = jax.random.uniform(jax.random.fold_in(kr, 1), (pool,), dtype=jnp.float64)
+        u = jax.random.uniform(jax.random.fold_in(kr, 1), (pool,), dtype=FLOAT)
         acc = f > u * fmax
         idx = jnp.where(acc, filled + jnp.cumsum(acc) - 1, n)
         out = out.at[idx].set(x, mode="drop")
@@ -53,6 +56,6 @@ def rejection(key, propose, fmax, n, pool, max_rounds=10_000, params=None):
 
     x0, _ = jax.eval_shape(lambda k: propose(k, pool, *(() if params is None else (params,))), key)
     out = jnp.zeros((n,) + x0.shape[1:], dtype=x0.dtype)
-    zero = jnp.zeros((), dtype=jnp.int64)
+    zero = jnp.zeros((), dtype=INT)
     out, filled, nprop, nover, _ = jax.lax.while_loop(cond, body, (out, zero, zero, zero, zero))
     return out, filled, nprop, nover

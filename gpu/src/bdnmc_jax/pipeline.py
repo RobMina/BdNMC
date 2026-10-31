@@ -164,14 +164,14 @@ def _recoil(sc, key, key_phi, dm, live, u_pos, t_in, t_out, origin=None, max_rou
 
     def body(st):
         xe, done, r = st
-        u = jax.random.uniform(jax.random.fold_in(key, r), (k, 2), dtype=jnp.float64)
+        u = jax.random.uniform(jax.random.fold_in(key, r), (k, 2), dtype=rng.FLOAT)
         x = u[:, 0] * (hi - lo) + lo
         acc = ~done & (electron.dsigma_dEe(x, E, sc.m_dm, sc.m_v, sc.kappa, sc.alpha_d) > dmax * u[:, 1])
         return jnp.where(acc, x, xe), done | acc, r + 1
 
     xe, done, _ = jax.lax.while_loop(cond, body, (jnp.where(live, 0.0, lo), ~live, 0))
     th_e = electron.theta_ee(xe, E, sc.m_dm)
-    ph_e = jax.random.uniform(key_phi, (k,), dtype=jnp.float64) * 2 * pi
+    ph_e = jax.random.uniform(key_phi, (k,), dtype=rng.FLOAT) * 2 * pi
     pe = jnp.sqrt(xe * xe - Me ** 2)
     px, py, pz = pe * jnp.sin(th_e) * jnp.cos(ph_e), pe * jnp.sin(th_e) * jnp.sin(ph_e), pe * jnp.cos(th_e)
     e4 = jnp.stack([jnp.sqrt(Me * Me + px * px + py * py + pz * pz), px, py, pz], axis=-1)
@@ -462,7 +462,7 @@ def finish(res, weighted=False):
     """Pass 2: accept against the run's maximum probability and compute se (unweighted and weighted)."""
     cat, n = res["candidates"], res["trials"]
     pmax = float(cat["prob"].max()) if len(cat["prob"]) else 0.0
-    weight_sum = float(cat["prob"][cat["ang_ok"]].sum())
+    weight_sum = float(cat["prob"][cat["ang_ok"]].sum(dtype=np.float64))  # float64 sum also of a float32 run
     if weighted:
         accepted = cat["ang_ok"]
         se = weight_sum / n * res["vnum"] * res["efficiency"]

@@ -69,7 +69,7 @@ class SanfordWang:
         return jnp.sin(th) * (self._sw(self.d, p, th) + self._sw(self.c, p, th))
 
     def propose(self, key, pool):
-        u = jax.random.uniform(key, (pool, 2), dtype=jnp.float64)
+        u = jax.random.uniform(key, (pool, 2), dtype=rng.FLOAT)
         th = 0 + (pi / 2.0 - 0) * u[:, 0]
         p = 0 + (self.ppimax - 0) * u[:, 1]
         return jnp.stack([p, th], axis=-1), self.density(p, th)
@@ -162,8 +162,8 @@ class BMPT:
 
     def propose(self, key, pool):
         k0, k1, k2 = jax.random.split(key, 3)
-        p = jax.random.uniform(k0, (pool,), dtype=jnp.float64) * self.p_max
-        th = jax.random.uniform(k1, (pool,), dtype=jnp.float64) * self.theta_max
+        p = jax.random.uniform(k0, (pool,), dtype=rng.FLOAT) * self.p_max
+        th = jax.random.uniform(k1, (pool,), dtype=rng.FLOAT) * self.theta_max
 
         def cond(st):
             th, i = st
@@ -171,7 +171,7 @@ class BMPT:
 
         def body(st):
             th, i = st
-            u = jax.random.uniform(jax.random.fold_in(k2, i), (pool,), dtype=jnp.float64)
+            u = jax.random.uniform(jax.random.fold_in(k2, i), (pool,), dtype=rng.FLOAT)
             return jnp.where(self.xR(p, th) > 1, th * u, th), i + 1
 
         th, _ = jax.lax.while_loop(cond, body, (th, 0))
@@ -237,7 +237,7 @@ class Envelope:
     cdf: np.ndarray = field(compare=False, repr=False)
 
     def propose(self, key, pool):
-        u = jax.random.uniform(key, (pool, 3), dtype=jnp.float64)
+        u = jax.random.uniform(key, (pool, 3), dtype=rng.FLOAT)
         n_v = len(self.v_lo)
         cell = jnp.minimum(jnp.searchsorted(jnp.asarray(self.cdf), u[:, 0], side="right"), len(self.cdf) - 1)
         ip, iv = cell // n_v, cell % n_v

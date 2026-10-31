@@ -24,7 +24,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from . import branching
+from . import branching, rng
 from .constants import MASS_ETA, MASS_PION_NEUTRAL, pi
 from .decay import triangle
 from .kinematics import lorentz_to, rotate_y, rotate_z
@@ -47,7 +47,7 @@ class OffShell:
 
     def propose(self, key, pool, params):
         m, mv, mx, mv_gamma = params
-        u = jax.random.uniform(key, (pool, 2), dtype=jnp.float64)
+        u = jax.random.uniform(key, (pool, 2), dtype=rng.FLOAT)
         s = 4 * mx * mx + (m * m - 4 * mx * mx) * u[:, 0]  # Random::Flat(4 mx^2, m^2)
         th = pi * u[:, 1]  # Random::Flat(0, pi)
         return jnp.stack([s, th], axis=-1), self.shape(s, th, m, mv, mx, mv_gamma)

@@ -109,7 +109,7 @@ class ProtonBrem:
         return sigmapp(_sprime(z, pt, self.beam_energy, mA)) * wpp(z, pt, mA)
 
     def propose(self, key, pool, mA):
-        u = jax.random.uniform(key, (pool, 2), dtype=jnp.float64)
+        u = jax.random.uniform(key, (pool, 2), dtype=rng.FLOAT)
         z = self.zmin + (self.zmax - self.zmin) * u[:, 0]
         pt = self.ptmin + (self.ptmax - self.ptmin) * u[:, 1]
         return jnp.stack([z, pt], axis=-1), self.shape(z, pt, mA)

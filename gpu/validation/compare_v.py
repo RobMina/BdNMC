@@ -68,7 +68,7 @@ def stock_weighted(logs):
 
 def port_v1(res):
     c, n, scale = res["candidates"], res["trials"], res["vnum"] * res["efficiency"]
-    w = np.where(c["ang_ok"], c["prob"], 0.0)
+    w = np.where(c["ang_ok"], c["prob"], 0.0).astype(np.float64)  # a float32 run's weights summed in float64
     trial_id = c["block"].astype(np.int64) * rng.BLOCK + c["trial"]
     _, inv = np.unique(trial_id, return_inverse=True)
     per_trial = np.bincount(inv, weights=w)
@@ -126,10 +126,29 @@ def tail_test(xs, xp, w, q):
     return {"cut": float(cut), "stock": float(fs), "port": float(fp), "pull": float((fp - fs) / math.hypot(ss, sp))}
 
 
+def v2_tests(vs, vp, w, v2c):
+    """The config's V2 histograms (and conditional slices) and tail tests: reference sample `vs` (unweighted) against
+    the weighted sample (`vp`, `w`). Returns (histograms, tails)."""
+    hist = {}
+    for name in v2c["variables"]:
+        hist[name] = chi2_test(vs[name], vp[name], w, v2c["n_bins"], v2c["min_expected_per_bin"])
+    cond = v2c["conditional"]
+    qs = np.quantile(vs[cond["in_quantiles_of"]], np.linspace(0, 1, cond["n_slices"] + 1))
+    qs[0], qs[-1] = -np.inf, np.inf
+    for k in range(cond["n_slices"]):
+        ms = (vs[cond["in_quantiles_of"]] > qs[k]) & (vs[cond["in_quantiles_of"]] <= qs[k + 1])
+        mp = (vp[cond["in_quantiles_of"]] > qs[k]) & (vp[cond["in_quantiles_of"]] <= qs[k + 1])
+        hist[f"{cond['variable']}|{cond['in_quantiles_of']}_q{k}"] = chi2_test(
+            vs[cond["variable"]][ms], vp[cond["variable"]][mp], w[mp], v2c["n_bins"], v2c["min_expected_per_bin"])
+    tails = {name: tail_test(vs[name], vp[name], w, v2c["tails"]["stock_quantile"]) for name in v2c["tails"]["variables"]}
+    return hist, tails
+
+
 def port_v2_sample(res):
     c = res["candidates"]
     live = c["ang_ok"] & (c["prob"] > 0)
-    return variables(c["electron"][live], c["dm"][live], c["parent"][live], c["vertex"][live]), c["prob"][live]
+    return (variables(c["electron"][live], c["dm"][live], c["parent"][live], c["vertex"][live]),
+            c["prob"][live].astype(np.float64))  # histogram sums in float64 also for a float32 run
 
 
 def main():
@@ -174,23 +193,12 @@ def main():
         xs_all = np.load(args.stock_dir / f"{stem}.npz")
         vs = variables(xs_all["electron"], xs_all["dm"], xs_all["parent"], xs_all["vertex"])
         vp, w = port_v2_sample(res)
-        hist = {}
-        for name in v2c["variables"]:
-            hist[name] = chi2_test(vs[name], vp[name], w, v2c["n_bins"], v2c["min_expected_per_bin"])
-        cond = v2c["conditional"]
-        qs = np.quantile(vs[cond["in_quantiles_of"]], np.linspace(0, 1, cond["n_slices"] + 1))
-        qs[0], qs[-1] = -np.inf, np.inf
-        for k in range(cond["n_slices"]):
-            ms = (vs[cond["in_quantiles_of"]] > qs[k]) & (vs[cond["in_quantiles_of"]] <= qs[k + 1])
-            mp = (vp[cond["in_quantiles_of"]] > qs[k]) & (vp[cond["in_quantiles_of"]] <= qs[k + 1])
-            hist[f"{cond['variable']}|{cond['in_quantiles_of']}_q{k}"] = chi2_test(
-                vs[cond["variable"]][ms], vp[cond["variable"]][mp], w[mp], v2c["n_bins"], v2c["min_expected_per_bin"])
+        hist, tl = v2_tests(vs, vp, w, v2c)
         for name, h in hist.items():
             if "fail" in h:
                 fails.append(f"{stem} {name}: {h['fail']}")
             else:
                 pvals.append(h["p"])
-        tl = {name: tail_test(vs[name], vp[name], w, v2c["tails"]["stock_quantile"]) for name in v2c["tails"]["variables"]}
         tails += [t["pull"] for t in tl.values()]
         point |= {"V2": hist, "tails": tl}
         out["points"][stem] = point
