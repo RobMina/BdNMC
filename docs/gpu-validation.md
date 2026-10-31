@@ -21,8 +21,9 @@ cuboid detectors; `NCE_electron`.
 - **On a V100** (G2, float64, stock sampler) pi0, brem, eta and off-shell pass V1 and V2 again, and `particle_list`
   gives the same V1 pass and parent-only V2 failure ([below](#v1-and-v2-on-a-v100)).
 - **float32** (`BDNMC_JAX_PRECISION=float32`, for GPUs without fast float64), with four float32-safe rewrites, agrees
-  with float64 in V1 and V2 on all five sets; against stock it misses two single statistics by a few percent of
-  their limits, so it is not a validated configuration ([below](#float32)).
+  with float64 rates within about 0.1 % and in every distribution, in two independent samples. It missed single
+  statistics in both, by a few percent of their limits (as the float64 control also did in the repeat), so under
+  the pre-declared rule it is not a validated configuration ([below](#float32)).
 - **Not validated yet:** other detectors, signals and models ([list](#not-validated-yet)).
 - **Event output** (text and HDF5) is tested for format and content ([Unit tests](#unit-tests)); it does not change
   the physics.
@@ -421,7 +422,10 @@ sampler) on a V100-SXM2-32GB (G2), one GPU per set, and compared with the same s
 | off-shell | 1.94, -0.18, 0.51 | 0.91, 0.016, 2.04 | pass |
 | `particle_list` | 1.52, +0.40, 0.78 | 0.01, 4.8e-9, 2.26 | V1 pass; V2 fails on the parent histograms only, as on G1 |
 
-The V100 rounds differently from the A100, so its events differ; these are independent repeats of the G1 results.
+At the same seeds the V100 gives the same accepted events as the A100: every count, `se` and V1/V2 statistic of
+these runs equals the G1 result (checked for brem: 1,765,857 / 1,769,739 / 1,860,216 accepted at the first three
+points on both). So these runs reproduce G1 on another GPU model rather than repeat it; the independent repeat is
+the seed-offset float64 control [below](#float32).
 
 ## float32
 
@@ -466,8 +470,32 @@ float64 runs):
 - **The functions** (`precision_v0.py`, float32 against the stock dump): median relative errors 1e-7 to 1e-5; worst
   cases after the fixes `sigma2` 1e-4, `dsigma_dEe` 3e-3, `theta_ee` 2.4 % (away from the endpoint; acos is
   ill-conditioned near 1), BMPT 2 %, path lengths within 1e-4 m with no hit/miss flips; brem functions <= 4e-7.
-- float32 is therefore usable where float64 is not available, at the cost of these function-level errors, but it is
-  not a validated configuration, and its throughput has not been measured yet.
+
+**The pre-declared repeat** (`gpu/validation/v_rerun_float32_20261031.json`, committed before the jobs: seed offset
+1,000,000, the five sets in float32 and as a float64 control, same frozen configs and stock references):
+
+| Set | float32 vs stock | float64 control vs stock | float32 vs float64 control |
+|---|---|---|---|
+| pi0 | pass | pass | pass |
+| brem | V2 **fails**: `E_e` tail pull +3.23 (`he_brem_cuboid_m020`) | pass | pass |
+| eta | pass | V2 fails: tail pull 3.09 | pass |
+| off-shell | pass | V2 fails: KS p 0.01 | V1 **fails**: one pull -3.59 (`he_offshell_cuboid_m001`) |
+| `particle_list` | V1 pass, V2 parent-only | V1 pass, V2 parent-only | pass |
+
+- **Verdict under the rule: float32 is not validated** (it needed every row to pass; the rule allows no third run).
+- **The failing statistics against the control:**
+  - The brem one is the high-energy electron tail of `he_brem_cuboid`. Over the four independent samples at the
+    same points (float64 and float32, two seeds each), that tail pull is +2.70, +1.61, +3.15, +1.70 at 1 MeV and
+    +2.08, +2.44, -0.36, +3.23 at 20 MeV: both precisions lean the same way by about the same amount. It is common
+    to the port against this stock reference (all four are compared with one stock sample), not a float32 effect;
+    float64 stays under 3 by chance.
+  - The off-shell one is two opposite fluctuations: at that point float64 is +1.56 and float32 -1.60 against stock
+    (at the first seeds -0.22 and -0.30), and the direct comparison, which carries only the port's errors, puts
+    them 3.6 sigma apart.
+  - The float64 control misses two limits of its own, so at these sample sizes the limits trip at a rate of a few per
+    full set in either precision.
+- **What is established:** float32 reproduces the float64 rates within about 0.1 % and no distribution differs, in
+  two independent samples; a strict pass of the frozen rule was not reached.
 
 ## Reproducibility
 
