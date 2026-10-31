@@ -245,9 +245,22 @@ end-to-end), against 17-23 % with the stock sampler at batch 64.
 - A stock baseline on a core of the GPU node itself, and the whole-node comparison (an exclusive G1 job is
   submitted: stock on one core and on every core of the node, the port on one GPU and on all eight).
 - A MIG slice.
-- P2 (a 20-mass x all-channel grid in one GPU-hour): `validation/run_grid.py` runs it end to end in one process; the
-  first runs are in progress. A new mass does not recompile (0 XLA compilations per mass after the first of each
-  base card, laptop test).
+
+## P2: a mass grid in one GPU-hour
+
+`validation/run_grid.py`, commit `ff1acf2`, one A100-SXM4-80GB (G1), float64, stock sampler: the ten generic base
+cards (mb and he; pi0, eta, proton brem, `particle_list`, off-shell pi0) x 20 masses (m_chi 1-45 MeV, log-spaced; only
+`dark_matter_mass` changes) x at least 80,000 accepted events each, HDF5 written, in one process timed from before
+the JAX import:
+
+| Samples | End to end | XLA compilation | Fewest events | Per sample after the first mass |
+|---|---|---|---|---|
+| 200 | **321 s (0.089 GPU-hours; P2 asks for <= 1)** | 218 compilations, 103 s | 82,499 | 0.75-2.3 s |
+
+- Each base card compiles on its first mass. The 5 later compilations each come where that card's candidate cap
+  doubled (a larger fixed-shape buffer); a change of mass alone never recompiled.
+- Trials per sample are sized from the previous mass's acceptance; one `mb_eta` sample came out short and was rerun
+  (included in the time).
 
 ## Reproducing
 

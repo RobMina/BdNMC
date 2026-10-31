@@ -23,6 +23,9 @@ generic, experiment-independent parameter cards.
   - brem (stock sampler): 293x on the 120 GeV card, 90-116x on the 8.9 GeV card (5.9 M rows per run; the rate
     depends on the shared node's host load).
   - Other GPU types: [docs](../docs/gpu-performance.md#all-four-cards-on-several-gpu-types-commit-85db916).
+- **Mass grid:** the ten generic base cards x 20 masses x 80k accepted events, HDF5 written, in 321 s end to end
+  on one A100 (0.09 GPU-hours), with no recompilation for a new mass
+  ([docs](../docs/gpu-performance.md#p2-a-mass-grid-in-one-gpu-hour)).
 - **float32:** `BDNMC_JAX_PRECISION=float32` for GPUs without fast float64; not validated, cost measured in the
   [docs](../docs/gpu-validation.md#float32).
 - **Not yet ported:** other channels, models and signals; the envelope sampler for brem.
