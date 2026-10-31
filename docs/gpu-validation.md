@@ -17,7 +17,7 @@ cuboid detectors; `NCE_electron`.
 - **`particle_list`** passes V1 on G1. V2 fails, only on the parent histograms, which the port and stock draw from
   the same finite list ([below](#particle_list)).
 - **Off-shell pi0 decay** (stock sampler) passes V1 and V2 on G1 at the first attempt ([below](#off-shell-decays)).
-  Its V0 entries are in the harness but not built yet.
+  Its V0 entries (pi0 and eta) pass.
 - **On a V100** (G2, float64, stock sampler) pi0, brem, eta and off-shell pass V1 and V2 again, and `particle_list`
   gives the same V1 pass and parent-only V2 failure ([below](#v1-and-v2-on-a-v100)).
 - **float32** (`BDNMC_JAX_PRECISION=float32`, for GPUs without fast float64) is not validated; its cost against
@@ -160,8 +160,8 @@ The port differs from stock where batching needs it:
   generic brem windows at m_A = 0.02, 0.1 and 0.3 GeV;
 - eta: its two branching ratios, and the K0 laws used for eta (`sanfordwang_k0`, `bmpt_k0_ics`, 1,600 points each).
 
-The harness also has the off-shell entries (branching ratio and (s, theta) density for pi0 and eta, 5 regimes, 20 x
-10 points each). They are skipped until the harness is rebuilt.
+The off-shell entries (branching ratio and (s, theta) density for pi0 and eta, 5 regimes, 20 x 10 points each)
+were added when the harness was rebuilt on 2026-10-31; every earlier value in the dump was unchanged.
 
 `tests/test_v0.py` compares the port with them.
 - **Tolerance:** (1e-12 + 64 eps x condition number) relative. The condition number covers cancellation (EeTMax at
@@ -170,7 +170,8 @@ The harness also has the off-shell entries (branching ratio and (s, theta) densi
 - **`ThetaEe` endpoint:** rows at the recoil endpoint may be NaN or <= 3e-8 in either code.
 - **Brem tolerances:** `wpp` and `d2N` use the same rule, with a condition number that also covers sigma_pp(s')
   as s' cancels near z = 1. `V_prod_rate` (40,401 positive terms summed in a different order) is within 1e-10.
-- **Result:** passes on L1 and on G1, with the brem and eta entries (harness rebuilt 2026-10-29). Dumps from three C1
+- **Result:** passes on L1 and on G1, with the brem and eta entries (harness rebuilt 2026-10-29); the off-shell
+  entries pass on L1 (rebuilt 2026-10-31; 10 tests, none skipped). Dumps from three C1
   builds also pass: the node gcc build, Intel icpx, and the container build
   ([gpu-performance.md](gpu-performance.md#stock-bdnmc-on-a-linux-cluster-node-c1)).
 
@@ -520,7 +521,6 @@ copied into that job's code tree.
 
 ## Not validated yet
 
-- the off-shell V0 entries (in the harness, not built yet);
 - the envelope sampler with off-shell decays or with `particle_list` (not run), and for `proton_brem` (not ported);
 - off-shell eta decay in V1/V2 (only pi0 has reference points);
 - V2 of the parent histograms for `particle_list` (see [above](#particle_list));

@@ -10,8 +10,8 @@ generic, experiment-independent parameter cards.
 - **Proton bremsstrahlung** (`V_decay` with `proton_brem`, stock parent sampler) passes V0 on CPU, and V1 and V2
   on an A100.
 - **eta decay** (`k0_sanfordwang`, `bpmt_k0`) passes V0, and V1 and V2 on an A100 with either parent sampler.
-- **Off-shell decays** (meson -> gamma V* -> gamma chi chi, stock sampler) pass V1 and V2 on an A100 for pi0; their
-  V0 entries wait for a harness rebuild.
+- **Off-shell decays** (meson -> gamma V* -> gamma chi chi, stock sampler) pass V0 for pi0 and eta, and V1 and V2
+  on an A100 for pi0.
 - **`particle_list`** passes V1 on an A100; V2 passes except for the parent histograms, whose inputs the port and
   stock share ([docs](../docs/gpu-validation.md#particle_list)).
 - **The same five sets pass again on an NVIDIA V100** in float64 (`particle_list` with the same parent-only V2
