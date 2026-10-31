@@ -19,7 +19,12 @@ def momentum(p4):
 
 def theta(p4):
     """calculatetheta: acos(pz / |p|)."""
-    return jnp.arccos(p4[..., 3] / momentum(p4))
+    c = p4[..., 3] / momentum(p4)
+    if c.dtype == jnp.float32:
+        # |pz / |p|| <= 1, but float32 rounding (GPU division and sqrt) takes it past 1 for particles along the beam
+        # axis, and the NaN would lose the particle; clipped, they get angle 0 (or pi). float64 is left as stock.
+        c = jnp.clip(c, -1.0, 1.0)
+    return jnp.arccos(c)
 
 
 def phi(p4):
