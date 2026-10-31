@@ -88,6 +88,8 @@ def _theta(p4):
 
 
 def variables(electron, dm, parent, vertex):
+    # in float64 also for a float32 run: acos near 1 in float32 resolves angles only to ~3.5e-4 rad
+    electron, dm, parent, vertex = (np.asarray(a, dtype=np.float64) for a in (electron, dm, parent, vertex))
     th = _theta(electron)
     return {"E_e": electron[:, 0], "theta_e": th, "E_e_theta_e2": electron[:, 0] * th ** 2, "E_chi": dm[:, 0],
             "theta_chi": _theta(dm), "vertex_x": vertex[:, 0], "vertex_y": vertex[:, 1], "vertex_z": vertex[:, 2],
