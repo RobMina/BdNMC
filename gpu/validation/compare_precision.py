@@ -69,14 +69,17 @@ def main():
             else:
                 pvals.append(h["p"])
         tails += [t["pull"] for t in tl.values()]
+        clipped = {"float64": float((vs["theta_e"] == 0).mean()),
+                   "float32": float((vp["theta_e"] == 0).mean())}  # electron.theta_ee clips float32 to angle 0
         out["points"][stem] = {"float64": a, "float32": b, "float32_dtypes": dtypes, "pull_se_weighted": pull,
+                               "fraction_theta_e_zero": clipped,
                                "rel_diff_se_weighted": b["se_weighted"] / a["se_weighted"] - 1,
                                "rel_diff_se_unweighted": b["se_unweighted"] / a["se_unweighted"] - 1,
                                "rel_diff_pmax": b["pmax"] / a["pmax"] - 1,
                                "rel_diff_hits_per_trial": (b["hits"] / b["trials"]) / (a["hits"] / a["trials"]) - 1,
                                "V2": hist, "tails": tl}
         print(f"{stem}: se_w f64 {a['se_weighted']:.6g} ± {a['sigma_weighted']:.2g}, f32 {b['se_weighted']:.6g} ± "
-              f"{b['sigma_weighted']:.2g}, pull {pull:+.2f}; pMax {b['pmax'] / a['pmax'] - 1:+.2e}; min V2 p "
+              f"{b['sigma_weighted']:.2g}, pull {pull:+.2f}; theta_e = 0: {clipped['float32']:.2e}; pMax {b['pmax'] / a['pmax'] - 1:+.2e}; min V2 p "
               f"{min((h.get('p', 0) for h in hist.values())):.3g}; prob dtype {dtypes['prob']}")
     n = len(pulls)
     chi2 = sum(p * p for p in pulls)

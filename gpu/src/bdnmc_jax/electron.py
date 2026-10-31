@@ -51,7 +51,13 @@ def ee_tmin(E, m):
 
 def theta_ee(Ee, E, m):
     """ThetaEe: electron lab angle for recoil energy Ee."""
-    return jnp.arccos(jnp.sqrt((Ee - Me) / (Ee + Me)) * (E + Me) / jnp.sqrt(E * E - m * m))
+    x = jnp.sqrt((Ee - Me) / (Ee + Me)) * (E + Me) / jnp.sqrt(E * E - m * m)
+    if x.dtype == jnp.float32:
+        # The argument is at most 1 (Ee <= EeTMax), but float32 rounding near the endpoint takes it above 1 often
+        # enough to fail most runs; clipped, those events get the endpoint angle 0 exactly. float64 is not clipped:
+        # there, as in stock (which writes NaN), it is rare, and the pipeline fails on it.
+        x = jnp.minimum(x, 1.0)
+    return jnp.arccos(x)
 
 
 def F2(Ee, E, m, mv):
