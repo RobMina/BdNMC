@@ -17,11 +17,14 @@ generic, experiment-independent parameter cards.
 - **The same five sets pass again on an NVIDIA V100** in float64 (`particle_list` with the same parent-only V2
   failure).
 - **Output:** stock's text event format or HDF5.
-- **Throughput** on an A100 with HDF5 output, in accepted events per second against one core of stock `-O2`:
+- **Throughput** on one A100 (idle node) with HDF5 output, in accepted events per second against one laptop core
+  of stock `-O2` (a core of the GPU node is slower, so these are the conservative figures):
   - stock parent sampler: 158x (Sanford-Wang card), 120x (BMPT card);
-  - envelope sampler: 250x and 873x;
-  - brem (stock sampler): 293x on the 120 GeV card, 90-116x on the 8.9 GeV card (5.9 M rows per run; the rate
-    depends on the shared node's host load).
+  - envelope sampler: 246x and 820x;
+  - brem (stock sampler): 269x on the 120 GeV card, 96x on the 8.9 GeV card (5.9 M rows per run, host-bound; 91-107x
+    over repeats).
+  - Whole node, 8 A100s against all 128 cores of the same node running stock: 38-52x (stock sampler), 7.5x on the
+    8.9 GeV brem card.
   - Other GPU types: [docs](../docs/gpu-performance.md#all-four-cards-on-several-gpu-types-commit-85db916).
 - **Mass grid:** the ten generic base cards x 20 masses x 80k accepted events, HDF5 written, in 321 s end to end
   on one A100 (0.09 GPU-hours), with no recompilation for a new mass

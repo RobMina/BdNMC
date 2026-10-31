@@ -65,5 +65,7 @@ same.
 ## Not yet run
 
 - A MIG slice of an A100 (P1 asks for one figure there).
-- A whole-node comparison: a GPU against every core of the same node running stock jobs (submitted as an exclusive
-  G1 job; results not yet in).
+
+The whole-node comparison ran on one exclusive G1 node: 2 x AMD EPYC 7742 (128 cores, one thread per core), 8 x
+A100-SXM4-80GB, 2 TB RAM; stock in C1's container build, pinned one run per core
+([gpu-performance.md](gpu-performance.md#p1-on-a-whole-idle-node-commit-c10833f)).

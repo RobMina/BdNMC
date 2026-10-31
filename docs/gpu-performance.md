@@ -7,20 +7,21 @@ must pass, is in [gpu-validation.md](gpu-validation.md).
 **Target (P1):** at least 100x one core of stock `-O2`, in accepted events per second, on each of the four 5 MeV
 generic cards. Measured on a full A100 in float64, with binary output included and compile time reported
 separately.
-**Status (2026-10-31, commit `85db916`, HDF5 written):** met on three of the four cards and borderline on the fourth:
+**Status (2026-10-31, commit `c10833f`, one A100-SXM4-80GB on an otherwise idle node, HDF5 written, median of three
+interleaved repeats; [below](#p1-on-a-whole-idle-node-commit-c10833f)):** met on three of the four cards and
+borderline on the fourth:
 
-| Card | stock sampler | envelope sampler |
+| Card | stock sampler, vs L1 / vs a core of the GPU node | envelope sampler, vs L1 / node core |
 |---|---|---|
-| `mb_pi0` | 158x | 250x |
-| `mb_brem` | **90-116x** (median of interleaved repeats 97x, 90x, 104x on three nodes) | (not ported) |
-| `he_pi0_cuboid` | 120x | 873x |
-| `he_brem_cuboid` | 293x | (not ported) |
+| `mb_pi0` | 158x / 628x | 246x / 979x |
+| `mb_brem` | **96x / 102x** (repeats 3.70-4.34 M accepted/s: 91-107x vs L1) | (not ported) |
+| `he_pi0_cuboid` | 120x / 423x | 820x / 2,900x |
+| `he_brem_cuboid` | 269x / 596x | (not ported) |
 
-`mb_brem` writes 5.9 M rows (1.4 GB) per 6.7e7 trials, and its rate depends on how busy the shared node's host is
-([below](#accepted-rows-gathered-on-the-device-commits-3f3993a-to-85db916)).
-
-Also not yet done for P1: the stock baseline is a laptop core rather than a core of the GPU node, and the MIG and
-whole-node figures are not measured (the whole-node job is submitted).
+`mb_brem` writes 5.9 M rows (1.4 GB) per 6.7e7 trials; its rate is set by the host side and varies by about ±10 % even
+on an idle node ([below](#accepted-rows-gathered-on-the-device-commits-3f3993a-to-85db916)). The whole-node figure
+(8 GPUs against 128 stock cores of the same node) is 38-52x on three cards and 7.5x on `mb_brem`. Not yet measured:
+a MIG slice.
 
 ## Stock BdNMC (L1, one core)
 
@@ -242,9 +243,32 @@ end-to-end), against 17-23 % with the stock sampler at batch 64.
 
 ## What is not measured yet
 
-- A stock baseline on a core of the GPU node itself, and the whole-node comparison (an exclusive G1 job is
-  submitted: stock on one core and on every core of the node, the port on one GPU and on all eight).
 - A MIG slice.
+- float32 throughput (in progress).
+
+## P1 on a whole, idle node, commit `c10833f`
+
+One exclusive G1 node (2 x AMD EPYC 7742, 128 cores, 8 x A100-SXM4-80GB, nothing else running), four phases in one
+job: stock `-O2` (C1's container build) on one core, then on all 128 cores at once (one run per core, pinned, own
+seeds, `output_mode summary`); the port on one GPU (three interleaved repeats), then on all eight at once (one
+process per GPU). Accepted events per second (stock: CPU time per trial x the card's accepted events per trial):
+
+| Card | stock, 1 core | stock, 128 cores | port, 1 GPU (median of 3) | port, 8 GPUs | 1 GPU / 1 core | 8 GPUs / 128 cores |
+|---|---|---|---|---|---|---|
+| `mb_pi0` | 168 | 15.6 k | 105.4 k | 810 k | 628x | 52x |
+| `mb_pi0` envelope | | | 164.1 k | 1.25 M | 979x | 80x |
+| `mb_brem` | 38.4 k | 3.75 M | 3.90 M | 28.0 M | 102x | 7.5x |
+| `he_pi0_cuboid` | 505 | 43.3 k | 213.4 k | 1.66 M | 423x | 38x |
+| `he_pi0` envelope | | | 1.46 M | 10.9 M | 2,900x | 251x |
+| `he_brem_cuboid` | 3.94 k | 344 k | 2.35 M | 16.2 M | 596x | 47x |
+
+- **Stock on this node:** one core takes 4.58 / 2.31 / 23.1 / 21.5 µs per trial (`mb_pi0` / `mb_brem` / `he_pi0` /
+  `he_brem`); with all 128 cores busy each core is 10-12 % slower. L1 is faster than this node's cores except on
+  `mb_brem`, so the speed-ups above against L1 are the conservative ones.
+- **The port on 8 GPUs at once:** each GPU keeps 95-99 % of its single-GPU rate on the pi0 cards and 87-90 % on brem,
+  where the eight processes share the host (pass 2 and the HDF5 writes).
+- **`mb_brem` repeats** on the idle node: 3.70 / 4.34 / 3.90 M accepted/s (best batch), so the host-side variation is
+  not only other jobs' load.
 
 ## P2: a mass grid in one GPU-hour
 
