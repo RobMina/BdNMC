@@ -71,8 +71,15 @@ def ldet_sphere(det, origin, p):
     o = r - origin
     A = _dot(p, p)
     B = -2 * _dot(o, p)
-    C = _dot(o, o) - det.radius ** 2
-    disc = B ** 2 - 4 * A * C
+    if A.dtype == jnp.float32:
+        # B^2 - 4AC cancels terms of order (2 |o| |p|)^2; in float32 that costs up to ~0.3 m of a 10 m chord. The same
+        # discriminant from the perpendicular offset w = o - t0 p of the closest approach: 4 A (R^2 - |w|^2).
+        t0 = _dot(o, p) / jnp.where(A == 0, 1.0, A)
+        w = o - t0[..., None] * p
+        disc = 4 * A * (det.radius ** 2 - _dot(w, w))
+    else:
+        C = _dot(o, o) - det.radius ** 2
+        disc = B ** 2 - 4 * A * C
     miss = (disc < 0) | (A == 0)
     sq = jnp.sqrt(jnp.where(miss, 0.0, disc))
     A_safe = jnp.where(A == 0, 1.0, A)

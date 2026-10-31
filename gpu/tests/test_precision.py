@@ -51,6 +51,21 @@ def test_float32_boost_is_stocks_boost():
     np.testing.assert_allclose(new, ref, rtol=1e-9, atol=1e-12)
 
 
+def test_float32_sigma2_difference_is_stocks():
+    # the float32 form of F2(hi) - F2(lo) equals stock's difference (both in float64) where that does not cancel
+    import jax.numpy as jnp
+    from bdnmc_jax import electron
+    from bdnmc_jax.constants import MASS_ELECTRON as Me
+    rs = np.random.default_rng(5)
+    E = rs.uniform(0.2, 50.0, 400)
+    lo = rs.uniform(Me + 1e-3, 0.5, 400)
+    hi = lo + rs.uniform(0.01, 5.0, 400)
+    for m, mv in ((0.005, 0.015), (0.045, 0.135)):
+        ref = np.asarray(electron.F2(jnp.asarray(hi), jnp.asarray(E), m, mv) - electron.F2(jnp.asarray(lo), jnp.asarray(E), m, mv))
+        new = np.asarray(electron._F2_difference(jnp.asarray(hi), jnp.asarray(lo), jnp.asarray(E), m, mv))
+        np.testing.assert_allclose(new, ref, rtol=1e-8)
+
+
 def test_unknown_precision_is_refused(tmp_path):
     env = os.environ | {"BDNMC_JAX_PRECISION": "float16"}
     r = subprocess.run([sys.executable, "-c", "import bdnmc_jax"], env=env, capture_output=True, text=True,

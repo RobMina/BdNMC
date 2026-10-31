@@ -66,8 +66,22 @@ def F2(Ee, E, m, mv):
 
 
 def sigma2(E, m, mv, kappa, alpha_d, emax, emin):
-    s = pi * kappa * kappa * alphaEM * alpha_d * (F2(emax, E, m, mv) - F2(emin, E, m, mv))
+    if jnp.result_type(E, emax, emin) == jnp.float32:
+        diff = _F2_difference(emax, emin, E, m, mv)
+    else:
+        diff = F2(emax, E, m, mv) - F2(emin, E, m, mv)
+    s = pi * kappa * kappa * alphaEM * alpha_d * diff
     return jnp.where(emax < emin, 0.0, s)
+
+
+def _F2_difference(hi, lo, E, m, mv):
+    """F2(hi) - F2(lo) for float32 without subtracting the two large F2 values: with x = 2 Me (Ee - Me) + mv^2, the
+    1/x terms differ by -2 Me (hi - lo) / (x_hi x_lo) and the logs by log1p(2 Me (hi - lo) / x_lo). Stock's
+    difference cancels to ~100 % error in float32 at narrow windows."""
+    x_hi, x_lo = 2 * Me * (hi - Me) + mv * mv, 2 * Me * (lo - Me) + mv * mv
+    a = 4 * E * E * Me * Me + 2 * E * Me * mv * mv + mv * mv * m * m
+    d = 2 * Me * (hi - lo)
+    return -(a * (-d / (x_hi * x_lo)) + (2 * E * Me + m * m) * jnp.log1p(d / x_lo)) / (Me * Me * (E - m) * (E + m))
 
 
 def dsigma_dEe(Ee, E, m, mv, kappa, alpha_d):
