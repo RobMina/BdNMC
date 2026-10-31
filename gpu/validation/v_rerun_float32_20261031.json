@@ -1,0 +1,44 @@
+{
+ "_comment": "Pre-declared before running: an independent repeat of the five V sets in float32 (BDNMC_JAX_PRECISION=float32), after the first float32 run missed two single statistics against stock. Committed before the jobs start; the result is judged only by the rule below.",
+ "declared": "2026-10-31",
+ "previous_result": {
+  "commit": "c10833f",
+  "precision": "float32",
+  "seed_offset": 0,
+  "gpu": "V100-SXM2-32GB",
+  "against_stock": "pi0 V1 fail (one pull 3.13, he_pi0_cuboid_m020; limit 3); brem V2 fail (one tail pull 3.15; limit 3); eta and off-shell pass; particle_list V1 pass, V2 fails on the parent histograms only, as in float64",
+  "against_float64": "V1 and V2 pass on all five sets"
+ },
+ "rerun": {
+  "commit": "c10833f",
+  "precision": "float32",
+  "seed_offset": 1000000,
+  "sets": ["pi0", "brem", "eta", "offshell", "list"],
+  "trials": "as validation/run_v_set.sh",
+  "gpu": "V100-SXM2-32GB",
+  "criteria": {
+   "pi0": "validation/v_config.json sha256 7058b254019718dd6d98f269a6f212398abd7c57006f8b0e2e279aa971c0467a",
+   "brem": "validation/v_config_brem.json sha256 3a8d5c3eef3c602c1400d5aa710f4c2ef3979de29ad498ea36c3275bb46cbff4",
+   "eta": "validation/v_config_eta.json sha256 38c688d1a72f38fb4be6263c03b67924fa9de46ade27c3718c82f68f6c6ef9b6",
+   "offshell": "validation/v_config_offshell.json sha256 b729ebda80435e723576f24615027c7f32af4371c98965be873186b3226a070e",
+   "list": "validation/v_config_list.json sha256 0f90e4a204d245e767c99e39265f5641d8743903100dd609e447b6c379857914"
+  },
+  "reference": "the same stock reference sets as every earlier run"
+ },
+ "control": {
+  "precision": "float64",
+  "seed_offset": 1000000,
+  "role": "the same repeat in float64, reported alongside and used for compare_precision.py; a failure here would point at the criteria or the reference, not at float32, and is reported as such"
+ },
+ "decision_rule": {
+  "float32_validated_if_all": [
+   "pi0, brem, eta and off-shell: the float32 rerun passes every V1 and V2 criterion of its config against stock",
+   "particle_list: V1 passes, and every V2 failure is a parent histogram (parent_p, parent_theta), as for float64",
+   "float32 against the float64 control (compare_precision.py): V1 and V2 pass on all five sets",
+   "no failed shard in any float32 set"
+  ],
+  "otherwise": "not validated; the failing statistics are looked at against the float64 control before anything else",
+  "no_further_reruns": "a third run to obtain a pass is not allowed under this rule; it would need a new declaration with reasons",
+  "reporting": "both float32 runs and the float64 control are reported in docs/gpu-validation.md whatever the outcome"
+ }
+}
