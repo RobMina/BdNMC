@@ -14,12 +14,17 @@ generic, experiment-independent parameter cards.
   V0 entries wait for a harness rebuild.
 - **`particle_list`** passes V1 on an A100; V2 passes except for the parent histograms, whose inputs the port and
   stock share ([docs](../docs/gpu-validation.md#particle_list)).
+- **The same five sets pass again on an NVIDIA V100** in float64 (`particle_list` with the same parent-only V2
+  failure).
 - **Output:** stock's text event format or HDF5.
-- **Throughput** with HDF5 output, in accepted events per second against one core of stock `-O2`:
-  - stock parent sampler: 126x (Sanford-Wang card), 109x (BMPT card);
-  - envelope sampler: 188x and 500x.
-  - brem (stock sampler): 140x on the 120 GeV card; 43x on the 8.9 GeV card, where writing the HDF5 file is 58 %
-    of the run.
+- **Throughput** on an A100 with HDF5 output, in accepted events per second against one core of stock `-O2`:
+  - stock parent sampler: 158x (Sanford-Wang card), 120x (BMPT card);
+  - envelope sampler: 250x and 873x;
+  - brem (stock sampler): 293x on the 120 GeV card, 90-116x on the 8.9 GeV card (5.9 M rows per run; the rate
+    depends on the shared node's host load).
+  - Other GPU types: [docs](../docs/gpu-performance.md#all-four-cards-on-several-gpu-types-commit-85db916).
+- **float32:** `BDNMC_JAX_PRECISION=float32` for GPUs without fast float64; not validated, cost measured in the
+  [docs](../docs/gpu-validation.md#float32).
 - **Not yet ported:** other channels, models and signals; the envelope sampler for brem.
 
 | Page | Content |
@@ -55,7 +60,10 @@ generic, experiment-independent parameter cards.
 | `validation/compare_stock_refs.py`, `diagnose_ties.py` | one stock reference against another; repeated values at bin edges |
 | `validation/check_shard_repro.py` | rerun blocks of a saved shard and compare (code changes, CPU against GPU) |
 | `validation/compare_parent_samplers.py` | high-statistics check of the envelope parent sampler against the stock proposal |
-| `validation/bench.py`, `validation/profile_port.py` | throughput (compile, steady state, device only) and where the time goes |
+| `validation/bench.py`, `validation/profile_port.py`, `profile_host.py` | throughput (compile, steady state, device only) and where the time goes, on the device and on the host |
+| `validation/run_grid.py` | goal P2: a grid of base cards and masses to a target number of accepted events each, end to end |
+| `validation/compare_precision.py`, `precision_v0.py`, `diagnose_nonfinite.py` | float32 against float64 (V1/V2 statistics), the V0 checks as an error report, and rows of a block with a non-finite electron |
+| `validation/summarize_v.py` | one line per V1/V2 result file, optionally per point and histogram |
 
 Outputs (`phase0/out/`, `validation/out/`), stock builds (`stock/`) and the virtual environment (`.venv/`) are not
 tracked. Pinned Python versions for the CPU environment: `requirements-lock.txt`.

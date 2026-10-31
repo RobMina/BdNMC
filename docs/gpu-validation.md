@@ -4,7 +4,7 @@ How the JAX port in [`gpu/`](../gpu) is checked against stock BdNMC, and the res
 G1 A100 node) are described in [test-environments.md](test-environments.md); throughput is in
 [gpu-performance.md](gpu-performance.md).
 
-**Status (2026-10-30).** Scope: pi0 and eta decay with Sanford-Wang or BMPT production or a particle list, on-shell
+**Status (2026-10-31).** Scope: pi0 and eta decay with Sanford-Wang or BMPT production or a particle list, on-shell
 `DecayDM` and off-shell `DecayDM_Off_Shell`, and proton bremsstrahlung (`V_decay` with `proton_brem`); sphere and
 cuboid detectors; `NCE_electron`.
 - **pi0, `parent_sampler="stock"`** (the default) passes V0, V1 and V2 on CPU (L1) and on an A100 (G1).
@@ -18,6 +18,10 @@ cuboid detectors; `NCE_electron`.
   the same finite list ([below](#particle_list)).
 - **Off-shell pi0 decay** (stock sampler) passes V1 and V2 on G1 at the first attempt ([below](#off-shell-decays)).
   Its V0 entries are in the harness but not built yet.
+- **On a V100** (G2, float64, stock sampler) pi0, brem, eta and off-shell pass V1 and V2 again, and `particle_list`
+  gives the same V1 pass and parent-only V2 failure ([below](#v1-and-v2-on-a-v100)).
+- **float32** (`BDNMC_JAX_PRECISION=float32`, for GPUs without fast float64) is not validated; its cost against
+  float64 is measured [below](#float32).
 - **Not validated yet:** other detectors, signals and models ([list](#not-validated-yet)).
 - **Event output** (text and HDF5) is tested for format and content ([Unit tests](#unit-tests)); it does not change
   the physics.
@@ -401,6 +405,45 @@ Per point, V1:
   burn-ins before the comparison. The secondary comparison is not a pass criterion.
 - **Unit tests** check the off-shell mode choice and `Vnum` against the stock logs, the sampler against its density,
   and the decay kinematics, including stock's x-z-plane V* direction.
+
+### V1 and V2 on a V100
+
+The five V sets rerun unchanged (same points, trials and seeds, frozen configs; commit `51d982f`, float64, stock
+sampler) on a V100-SXM2-32GB (G2), one GPU per set, and compared with the same stock references:
+
+| Set | V1: max \|pull\|, mean pull, chi2 p | V2: KS p, smallest p, max \|tail pull\| | Verdict |
+|---|---|---|---|
+| pi0 | 2.15, +0.80, 0.47 | 0.50, 0.0028, 2.51 | pass |
+| brem | 1.13, +0.06, 0.90 | 0.54, 0.00063, 2.70 | pass |
+| eta | 1.89, -0.30, 0.49 | 0.29, 0.0074, 2.91 | pass |
+| off-shell | 1.94, -0.18, 0.51 | 0.91, 0.016, 2.04 | pass |
+| `particle_list` | 1.52, +0.40, 0.78 | 0.01, 4.8e-9, 2.26 | V1 pass; V2 fails on the parent histograms only, as on G1 |
+
+The V100 rounds differently from the A100, so its events differ; these are independent repeats of the G1 results.
+
+## float32
+
+`BDNMC_JAX_PRECISION=float32`, set before `bdnmc_jax` is first imported, runs the device code in float32 (JAX's
+64-bit mode off); host-side setup, pass 2 and the sums stay in float64. It is meant for endpoints without fast
+float64, and it is not a validated configuration. Its cost is measured three ways:
+`validation/precision_v0.py` (the V0 function checks as a per-function error report), the five V sets against
+stock with the frozen configs, and `validation/compare_precision.py` (float32 against float64 run with the same
+points and seeds; the two precisions draw different random bits, so the samples are independent).
+
+Plain float32 of stock's expressions fails in four places, each fixed for float32 only (float64 keeps stock's
+expressions):
+- **`acos` of a cosine just above 1.** pz/|p| of a DM along the beam axis (0.99999997 in float64) rounds past 1 on
+  the GPU, and `theta_ee`'s argument does so near the recoil endpoint. Both stopped most `mb` runs with a
+  non-finite electron; both are clipped to the endpoint.
+- **The Lorentz boost.** Stock goes gamma -> beta = sqrt(1 - 1/gamma^2) -> 1/sqrt(1 - beta^2), which loses about
+  2 eps gamma^2 of gamma (several % at gamma ~ 700). float32 boosts from the parent's four-momentum (gamma = E/m,
+  gamma beta = |p|/m). Before this, `E_chi` failed V2 against float64 at every 120 GeV point.
+- **`sigma2`**, the scatter cross section, a difference of two large F2 values: written as the difference of its
+  1/x and log terms (worst float32 error against the stock dump 110 % -> 1e-4).
+- **The sphere's path length:** the discriminant from the closest approach instead of B^2 - 4AC (worst error
+  0.29 m -> 9e-5 m; no hit/miss flips in 2,000 rays).
+
+Results with these fixes are being collected.
 
 ## Reproducibility
 

@@ -7,16 +7,20 @@ must pass, is in [gpu-validation.md](gpu-validation.md).
 **Target (P1):** at least 100x one core of stock `-O2`, in accepted events per second, on each of the four 5 MeV
 generic cards. Measured on a full A100 in float64, with binary output included and compile time reported
 separately.
-**Status (2026-10-29):** met on three of the four cards. On the two pi0 cards with HDF5 output included, for both
-validated parent samplers:
-- stock sampler: 126x on `mb_pi0`, 109x on `he_pi0`;
-- envelope sampler: 188x on `mb_pi0`, 500x on `he_pi0`.
+**Status (2026-10-31, commit `85db916`, HDF5 written):** met on three of the four cards and borderline on the fourth:
 
-On the brem cards (stock sampler, the only one ported for brem): met on `he_brem_cuboid` (140x), **not met on
-`mb_brem` (43x)**, where writing the HDF5 file takes 58 % of the run ([below](#proton-brem-with-hdf5-output-commit-2c9e3c7)).
+| Card | stock sampler | envelope sampler |
+|---|---|---|
+| `mb_pi0` | 158x | 250x |
+| `mb_brem` | **90-116x** (median of interleaved repeats 97x, 90x, 104x on three nodes) | (not ported) |
+| `he_pi0_cuboid` | 120x | 873x |
+| `he_brem_cuboid` | 293x | (not ported) |
+
+`mb_brem` writes 5.9 M rows (1.4 GB) per 6.7e7 trials, and its rate depends on how busy the shared node's host is
+([below](#accepted-rows-gathered-on-the-device-commits-3f3993a-to-85db916)).
 
 Also not yet done for P1: the stock baseline is a laptop core rather than a core of the GPU node, and the MIG and
-whole-node figures are not measured.
+whole-node figures are not measured (the whole-node job is submitted).
 
 ## Stock BdNMC (L1, one core)
 
@@ -70,6 +74,12 @@ All runs were CPU-bound (99 % of a core). That is more than the hardware differe
   dump differs by up to 4.1e-14 relative and the container dump by 1.8e-15 (`v0/compare_dumps.py`).
 - The container build is the fastest, 1.7x the node build, from glibc 2.36's faster `pow`, but still about 4x slower
   per trial than L1. Stock reference runs on C1 use it.
+
+**The four P1 cards with the container build**, one after another on one core (two jobs on the same node type,
+agreeing to 1 %; `output_mode summary`), CPU time per trial: `mb_pi0` 5.02 µs, `mb_brem` 2.44 µs, `he_pi0_cuboid`
+25.9 µs, `he_brem_cuboid` 22.9 µs. Against L1 `-O2` that is 4.4x, 1.1x, 4.0x and 2.4x slower. C1 is nearly as fast
+as L1 on `mb_brem`; the gap is largest on `mb_pi0`, whose time goes to `pow` (above). The brem cards have not been
+profiled on C1.
 
 **Not tried yet:**
 - `-ffast-math`. It would at most skip `libm`'s error-handling wrappers. Its other effects on stock's results are not
@@ -154,10 +164,55 @@ trials per card:
   (5.9 M rows, 265 bytes each), and writing it to the cluster's shared scratch file system at about 0.8 GB/s takes
   58 % of the run. Generation alone runs at 4.2 M accepted/s (104x). The host side between device and file
   (transfer, checks) is the next cost: device only is 229 M trials/s against 47.5 M for generation end to end.
-- **Ways to close it, none tried yet:** write to node-local disk; overlap the write with generation; drop columns
-  that can be recomputed (`recoil_dm` is the DM minus the electron).
 - **L1, one core** (commit `9127b57`, no output): `he_brem_cuboid` at 0.32 M trials/s, 27.3 k accepted/s, 3.1x one
   core of stock `-O2`.
+
+### Accepted rows gathered on the device, commits `3f3993a` to `85db916`
+
+The host side above (copying every candidate's 4-vectors off the device, then the write) was the `mb_brem` limit.
+`pipeline.events` now keeps the candidates' large fields on the device until pass 2 has chosen the accepted rows,
+gathers those there in output order, and copies only them; with `stream=True` the HDF5 writer takes each batch as
+its copy arrives, so the copies overlap the write and the rows are never joined on the host. The HDF5 file is
+identical to the one from `finish(candidates(...))` (tests). A brem event's parent is its V, so `parent` is written
+as an HDF5 hard link to `mediator`.
+
+`mb_brem` on G1, batch 256, 6.7e7 trials, HDF5 to the shared scratch file system. The A100 nodes are shared with
+other jobs, and this host-heavy run varies by about ±30 % with the node's load, so code versions are compared in
+one job on one node, interleaved, five repeats each (medians):
+
+| Node | before streaming (`476abbe`) | streaming (`50017f0`) | vs stock `-O2` |
+|---|---|---|---|
+| A | 3.24 M accepted/s | 3.93 M/s | 97x |
+| A (busier) | 2.93 M/s | 3.66 M/s | 90x |
+| B | 3.21 M/s | 4.22 M/s | 104x |
+
+The remaining host time is NumPy in pass 2 and the output ordering (the boolean selection of the pass-2 fields,
+the sort key and the event numbering): about 1.4 s of a run whose device time is 0.28 s
+(`validation/profile_host.py --events --stream`). Moving them to the device is the next step.
+
+### All four cards on several GPU types, commit `85db916`
+
+`bench.py --write hdf5`, stock sampler (and envelope for pi0), best of batch 64 and 256, one job per GPU type and
+card pair (G1 and G2, a single run each, so node load adds the variation above). Accepted events per second, and the
+speed-up over one L1 core of stock `-O2`:
+
+| GPU | `mb_pi0` | `mb_pi0` envelope | `mb_brem` | `he_pi0_cuboid` | `he_pi0` envelope | `he_brem_cuboid` |
+|---|---|---|---|---|---|---|
+| A100-SXM4-80GB | 105 k (158x) | 167 k (250x) | 4.23 M (104x) | 215 k (120x) | 1.56 M (873x) | 2.55 M (293x) |
+| A100-SXM4-40GB | 102 k (153x) | 146 k (218x) | 3.86 M (95x) | 195 k (109x) | 1.42 M (797x) | 2.27 M (261x) |
+| V100-SXM2-32GB | 74 k (111x) | 108 k (163x) | 2.79 M (69x) | 120 k (67x) | 833 k (467x) | 1.43 M (164x) |
+| RTX 3090 | 18 k (27x) | 63 k (94x) | 2.25 M (56x) | 27 k (15x) | 622 k (349x) | 543 k (62x) |
+| RTX A6000 | 18 k (26x) | 60 k (90x) | 1.62 M (40x) | 25 k (14x) | 568 k (318x) | 524 k (60x) |
+| A40 | 16 k (24x) | 54 k (82x) | 2.39 M (59x) | 24 k (13x) | 622 k (349x) | 507 k (58x) |
+| RTX 2080 Ti (batch 64) | 13 k (20x) | 47 k (70x) | 1.77 M (44x) | 20 k (11x) | 467 k (262x) | 424 k (49x) |
+
+- The port runs in float64, and the A40, A6000 and RTX cards run FP64 at 1/32 of FP32: their device-only rate is
+  7-9x below the A100 on `he_pi0` and about 8x on `he_brem`. They hold up only where the host side, or the cheap
+  envelope sampler, sets the pace.
+- The V100 (full-rate FP64) runs at 55-75 % of the A100.
+- The RTX 2080 Ti (11 GB) runs out of device memory at batch 256.
+- A float32 mode exists for GPUs without fast FP64 (`BDNMC_JAX_PRECISION=float32`, see
+  [gpu-validation.md](gpu-validation.md#float32)); none of these figures use it.
 
 ## Where the time goes
 
@@ -187,10 +242,12 @@ end-to-end), against 17-23 % with the stock sampler at batch 64.
 
 ## What is not measured yet
 
-- A stock baseline on a core of the GPU node itself, and the whole-node comparison.
+- A stock baseline on a core of the GPU node itself, and the whole-node comparison (an exclusive G1 job is
+  submitted: stock on one core and on every core of the node, the port on one GPU and on all eight).
 - A MIG slice.
-- P2 (a 20-mass x all-channel grid in one GPU-hour): masses are already runtime inputs, so a mass scan reuses the
-  compiled kernel, but the grid itself has not been run.
+- P2 (a 20-mass x all-channel grid in one GPU-hour): `validation/run_grid.py` runs it end to end in one process; the
+  first runs are in progress. A new mass does not recompile (0 XLA compilations per mass after the first of each
+  base card, laptop test).
 
 ## Reproducing
 
@@ -198,6 +255,8 @@ end-to-end), against 17-23 % with the stock sampler at batch 64.
 cd gpu
 python validation/bench.py phase0/cards/ref/mb_pi0_m005.dat 134217728 --batch 16 64 256 [--parent-sampler envelope] [--write hdf5 --out-dir DIR]
 python validation/profile_port.py phase0/cards/ref/he_pi0_cuboid_m005.dat --batch 16 64 256 [--parent-sampler envelope]
+python validation/profile_host.py phase0/cards/mb_brem_m005.dat 67108864 --events --stream --out-dirs DIR
+python validation/run_grid.py phase0/cards/*_m005.dat --out-dir DIR --n-masses 20 --events 80000 --json grid.json
 ```
 
 On CPU, set `XLA_FLAGS=--xla_cpu_multi_thread_eigen=false` to keep one process near one core.

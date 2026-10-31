@@ -25,11 +25,28 @@ pages names its environment by the label used here.
 | Host | x86-64 node; each job allocated 8 CPU cores and 64 GB RAM |
 | Python | 3.14.9 (a virtual environment on the cluster's scratch file system) |
 | Python packages | `jax` 0.12.0.1 with `jax-cuda12-plugin` and `jax-cuda12-pjrt` 0.12.0.1 (CUDA runtime 12.9.79 from the pip wheels), `numpy` 2.5.4, `scipy` 1.18.1, `pytest` 9.2.0 |
-| JAX settings | float64; `XLA_PYTHON_CLIENT_PREALLOCATE=false`; every job checks `jax.default_backend() == "gpu"` before starting |
+| JAX settings | float64 unless a result says float32 (`BDNMC_JAX_PRECISION`); `XLA_PYTHON_CLIENT_PREALLOCATE=false`; every job checks `jax.default_backend() == "gpu"` before starting |
 | Code | a `git archive` of one commit of this branch per job; the stock reference data (event summaries and logs, about 1 GB) copied next to it |
 
 The same JAX, NumPy and SciPy versions are used on L1 and G1, so differences between them come from the backend
 (XLA CPU against XLA CUDA), not from the library versions.
+
+## G2: other GPUs of the same cluster
+
+The same software, job size (8 CPU cores, 64 GB RAM, one full GPU) and code handling as G1, on the cluster's other
+GPU types:
+
+| GPU | Memory | Compute capability | Driver | FP64 |
+|---|---|---|---|---|
+| NVIDIA Tesla V100-SXM2 | 32 GB | 7.0 | 580.159.04 | full rate (1/2 of FP32) |
+| NVIDIA A100-SXM4 | 40 GB | 8.0 | 595.71.05 | full rate |
+| NVIDIA A40 | 48 GB | 8.6 | 595.71.05 | 1/32 of FP32 |
+| NVIDIA RTX A6000 | 48 GB | 8.6 | 595.71.05 | 1/32 of FP32 |
+| NVIDIA GeForce RTX 3090 | 24 GB | 8.6 | 595.71.05 | 1/32 of FP32 |
+| NVIDIA GeForce RTX 2080 Ti | 11 GB | 7.5 | 595.71.05 | 1/32 of FP32 |
+
+The V100 runs the GPU test suite (94 passed, 19 skipped, as on G1) and the float64 V1/V2 sets
+([gpu-validation.md](gpu-validation.md#v1-and-v2-on-a-v100)); the others were used for timing only.
 
 ## C1: CPU node of the same cluster (stock builds)
 
@@ -48,5 +65,5 @@ same.
 ## Not yet run
 
 - A MIG slice of an A100 (P1 asks for one figure there).
-- A whole-node comparison: a GPU against every core of the same node running stock jobs.
-- GPUs other than the A100-80GB.
+- A whole-node comparison: a GPU against every core of the same node running stock jobs (submitted as an exclusive
+  G1 job; results not yet in).

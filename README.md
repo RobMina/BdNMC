@@ -48,9 +48,9 @@ parameter cards and is validated statistically against this code.
 
 **Output:** stock's text event format or HDF5.
 
-**Throughput:** on one NVIDIA A100, with HDF5 output, 109-500x one core of an optimised stock build on the pi0
-cards (depending on the card and the parent sampler), and 43-140x on the brem cards. See
-[gpu/README.md](gpu/README.md).
+**Throughput:** on one NVIDIA A100, with HDF5 output, 120-873x one core of an optimised stock build on the pi0
+cards (depending on the card and the parent sampler), and 90-293x on the brem cards; a V100 runs at 55-75 % of
+that. See [gpu/README.md](gpu/README.md).
 
 ## Layout
 

@@ -134,7 +134,10 @@ Differences from stock's files:
   one weight per event, the last DM's, which misstates events with two DM.
 
 From Python: `bdnmc_jax.output.write_text(res, path, summary_path=None)` and `write_hdf5(res, path)`, where `res`
-is `pipeline.finish(candidates, weighted=...)`.
+is `pipeline.finish(candidates, weighted=...)`, or, faster for large outputs, `pipeline.events(card, n_trials,
+weighted=..., batch=..., cap=...)`: the same events, with only the accepted rows copied off the device. With
+`stream=True` the rows stay on the device per batch, copies started, and `write_hdf5` writes each batch as it
+arrives; `output.collect(res)` joins them in memory instead.
 
 **From Python:**
 
@@ -153,6 +156,11 @@ electrons = c["electron"][res["accepted_mask"]]
   run is identical to a single-process run.
 - **`batch`:** 2^16-trial blocks per device call (8 by default). Use 64-256 on an A100; it does not change the
   results.
+- **Precision:** float64 by default, the validated configuration. `BDNMC_JAX_PRECISION=float32` in the
+  environment, before `bdnmc_jax` is first imported, runs the device code in float32 for GPUs without fast float64;
+  it is not validated, and its measured cost is in [gpu-validation.md](gpu-validation.md#float32).
+- **Mass scans:** masses are runtime inputs, so the cards of a scan share the compiled kernel;
+  `validation/run_grid.py` runs a grid of base cards and masses to a target number of accepted events each.
 
 ### What the port accepts
 
