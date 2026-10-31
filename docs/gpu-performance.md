@@ -257,6 +257,7 @@ the JAX import:
 |---|---|---|---|---|
 | 200 | **321 s (0.089 GPU-hours; P2 asks for <= 1)** | 218 compilations, 103 s | 82,499 | 0.75-2.3 s |
 
+- The same grid on a V100-SXM2-32GB (G2): 428.6 s end to end (0.119 GPU-hours), 218 compilations (106 s).
 - Each base card compiles on its first mass. The 5 later compilations each come where that card's candidate cap
   doubled (a larger fixed-shape buffer); a change of mass alone never recompiled.
 - Trials per sample are sized from the previous mass's acceptance; one `mb_eta` sample came out short and was rerun

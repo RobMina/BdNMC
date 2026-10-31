@@ -20,8 +20,9 @@ cuboid detectors; `NCE_electron`.
   Its V0 entries (pi0 and eta) pass.
 - **On a V100** (G2, float64, stock sampler) pi0, brem, eta and off-shell pass V1 and V2 again, and `particle_list`
   gives the same V1 pass and parent-only V2 failure ([below](#v1-and-v2-on-a-v100)).
-- **float32** (`BDNMC_JAX_PRECISION=float32`, for GPUs without fast float64) is not validated; its cost against
-  float64 is measured [below](#float32).
+- **float32** (`BDNMC_JAX_PRECISION=float32`, for GPUs without fast float64), with four float32-safe rewrites, agrees
+  with float64 in V1 and V2 on all five sets; against stock it misses two single statistics by a few percent of
+  their limits, so it is not a validated configuration ([below](#float32)).
 - **Not validated yet:** other detectors, signals and models ([list](#not-validated-yet)).
 - **Event output** (text and HDF5) is tested for format and content ([Unit tests](#unit-tests)); it does not change
   the physics.
@@ -444,7 +445,29 @@ expressions):
 - **The sphere's path length:** the discriminant from the closest approach instead of B^2 - 4AC (worst error
   0.29 m -> 9e-5 m; no hit/miss flips in 2,000 rays).
 
-Results with these fixes are being collected.
+**Results with all four fixes** (commit `c10833f`, the five V sets on V100s, the same points, trials and seeds as the
+float64 runs):
+
+| Set | float32 vs float64: V1 max \|pull\|, mean; V2 KS p, smallest p | float32 vs stock (frozen configs) |
+|---|---|---|
+| pi0 | 1.65, -0.16; 0.26, 0.0035 | V1 **fails**: one pull of 3.13 (`he_pi0_cuboid_m020`; limit 3); V2 passes |
+| brem | 1.56, -0.21; 0.62, 0.018 | V1 passes; V2 **fails**: one tail pull of 3.15 (limit 3) |
+| eta | 2.26, +0.13; 0.96, 0.0079 | V1 and V2 pass |
+| off-shell | 1.82, +0.11; 0.02, 0.00079 | V1 and V2 pass |
+| `particle_list` | 0.97, -0.35; 0.13, 0.0027 | V1 passes; V2 fails on the parent histograms only, as in float64 |
+
+- **Against float64, float32 passes V1 and V2 on every set.** Per point, `se` differs by 0.003-0.37 % (each within
+  the statistical error: pulls within ±2.3), with no common shift: the mean pulls of -0.35 to +0.13 over 8 points
+  bound a float32 bias of the rate to about 0.1 %. No histogram differs.
+- **Against stock**, the two misses are single statistics just past their limits. Among 40 V1 pulls and about 128
+  tail tests, values this large are expected by chance about 7 % and 20 % of the time, and the more direct float32
+  against float64 comparison shows nothing at either point. They are counted as failures, as the frozen rules say;
+  a repeat with independent seeds would settle them.
+- **The functions** (`precision_v0.py`, float32 against the stock dump): median relative errors 1e-7 to 1e-5; worst
+  cases after the fixes `sigma2` 1e-4, `dsigma_dEe` 3e-3, `theta_ee` 2.4 % (away from the endpoint; acos is
+  ill-conditioned near 1), BMPT 2 %, path lengths within 1e-4 m with no hit/miss flips; brem functions <= 4e-7.
+- float32 is therefore usable where float64 is not available, at the cost of these function-level errors, but it is
+  not a validated configuration, and its throughput has not been measured yet.
 
 ## Reproducibility
 
