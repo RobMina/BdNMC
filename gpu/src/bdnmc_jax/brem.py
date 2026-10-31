@@ -185,13 +185,15 @@ class BremEnvelope:
         f = self.base.shape(z, pt, mA) / t.bound[cell]
         return jnp.stack([z, pt], axis=-1), jnp.where(jnp.isfinite(f), f, jnp.inf)
 
-    def tables(self, mA, n_sub=6, margin=1.2, n_check=2_000_000, seed=0):
+    def tables(self, mA, n_sub=6, margin=1.2, n_check=250_000, seed=0):
         """Build and check the tables for m_A: z in n_z equal bins; pT in n_pt bins equal in log(pT - ptmin + c0),
         c0 = the smallest pT-free part of wpp's H over the window (the density falls like a power of 1/H). Each
         cell's bound is the maximum on an n_sub x n_sub sub-grid (edges included) x margin. The CDF is rounded to
         the device dtype first and the bound recomputed from it, so the cell probabilities the device uses and the
         bound it divides by agree exactly. Checked on n_check random points chosen like the sampler does; raises if
-        any exceeds its cell's bound. All evaluations have fixed shapes (no compile for a new mass)."""
+        any exceeds its cell's bound. The tables are built per mass, inside every run's setup, so the check is kept
+        small (2e6 points cost about 0.2 s, 2.5e5 about 0.03 s); every proposal is checked against its bound at run
+        time anyway (over_bar, a failure). All evaluations have fixed shapes (no compile for a new mass)."""
         b = self.base
         if not (b.zmax > b.zmin and b.ptmax > b.ptmin):
             raise NotImplementedError(f"envelope needs a window of nonzero area, got z [{b.zmin}, {b.zmax}], "

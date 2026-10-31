@@ -22,6 +22,7 @@ def main():
     ap.add_argument("cards", type=Path, nargs="+")
     ap.add_argument("--mv", type=float, nargs="+", default=[0.01, 0.1, 0.5])
     ap.add_argument("--n-check", type=int, default=2_000_000)
+    ap.add_argument("--table-check", type=int, default=250_000, help="n_check of BremEnvelope.tables")
     ap.add_argument("--json", type=Path)
     args = ap.parse_args()
     rows = []
@@ -32,7 +33,7 @@ def main():
         env = brem.BremEnvelope(base)
         for mv in args.mv:
             t0 = time.perf_counter()
-            t = env.tables(mv)
+            t = env.tables(mv, n_check=args.table_check)
             dt = time.perf_counter() - t0
             fmax = base.find_fmax(mv)
             area = (base.zmax - base.zmin) * (base.ptmax - base.ptmin)
