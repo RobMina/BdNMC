@@ -27,6 +27,8 @@ From: python:3.14-slim-bookworm
     exec python /opt/BdNMC/gpu/examples/quickstart.py "$@"
 
 %test
+    # on a build node without a GPU (no --nv) JAX's CUDA plugin logs a cuInit traceback before falling back to the CPU
+    command -v nvidia-smi >/dev/null 2>&1 || export JAX_PLATFORMS=cpu
     python -c "import bdnmc_jax, jax; print('bdnmc_jax', bdnmc_jax.PRECISION, 'jax', jax.__version__, jax.default_backend())"
 
 %labels
