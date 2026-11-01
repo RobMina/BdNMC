@@ -28,6 +28,9 @@ Two deliberate differences, both documented in docs/install-and-quickstart.md:
 
 HDF5 (`write_hdf5`) holds the same accepted rows as arrays, with a `weight` per row whose sum is the predicted
 number of signal events in both modes, and the run's card and settings as attributes.
+
+HEPEVT text (`write_hepevt`) is the input of detector simulations' text generators: the recoil electron and recoil
+DM of every accepted DM, in a detector frame the caller gives (experiment integrations supply their own frames).
 """
 from pathlib import Path
 import time
@@ -200,3 +203,47 @@ def _write_streamed(g, res):
     if res.get("parent_is_mediator") and "mediator" in g:
         g["parent"] = g["mediator"]  # a brem event's parent is its V; a hard link
     return n_rows
+
+
+LENGTH_UNITS = {"m": 1.0, "cm": 100.0, "mm": 1000.0}  # per metre
+TIME_UNITS = {"s": 1.0, "ns": 1e9}  # per second
+
+
+def write_hepevt(res, path, origin=(0.0, 0.0, 0.0), rotation=None, length_unit="cm", time_unit="ns", dm_pdg=18,
+                 dm_status=2):
+    """The accepted events as HEPEVT-style text, the input of detector simulations' text generators (LArSoft's
+    TextFileGen, edep-sim's HEPEVT kinematics): per event a line `<event index> <number of particles>`, then one line
+    per particle `status pdg mother1 mother2 daughter1 daughter2 px py pz E m x y z t`, momenta and masses in GeV.
+    Each accepted DM contributes its recoil electron (status 1, PDG 11: tracked) and its recoil DM (status
+    `dm_status`, PDG `dm_pdg`; 2 and 18 by default, so a simulation does not track it), both at the interaction point;
+    no mother/daughter links (zeros).
+    The detector frame: position_det = rotation @ (position - origin) and momentum_det = rotation @ momentum, with
+    `origin` (m) in BdNMC's beam frame and `rotation` a 3 x 3 matrix (identity by default); the experiment supplies
+    both. Vertices are written in `length_unit` (m, cm or mm) and times in `time_unit` (s or ns). Unweighted results
+    only: HEPEVT carries no event weight. Returns the number of events written."""
+    if res.get("weighted"):
+        raise ValueError("write_hepevt writes unweighted events: HEPEVT carries no event weight")
+    res = collect(res)
+    card = cardmod.parse_card(res["card"])
+    c = res["candidates"]
+    rows, event = accepted_events(res)
+    rot = np.eye(3) if rotation is None else np.asarray(rotation, dtype=float)
+    vtx = np.asarray(c["vertex"], dtype=float)[rows]
+    pos = (vtx[:, :3] - np.asarray(origin, dtype=float)) @ rot.T * LENGTH_UNITS[length_unit]
+    t = vtx[:, 3] * TIME_UNITS[time_unit]
+    e4, d4 = (np.asarray(c[k], dtype=float)[rows] for k in ("electron", "recoil_dm"))
+    pe, pd = e4[:, 1:] @ rot.T, d4[:, 1:] @ rot.T
+    starts = np.flatnonzero(np.r_[True, event[1:] != event[:-1]]) if len(event) else np.zeros(0, int)
+    ends = np.r_[starts[1:], len(event)]
+    g = "{:.10g}".format
+    with open(path, "w") as f:
+        for i, (a, b) in enumerate(zip(starts, ends)):
+            lines = [f"{i} {2 * (b - a)}\n"]
+            for r in range(a, b):
+                x = " ".join(g(v) for v in (*pos[r], t[r]))
+                lines.append(f"1 11 0 0 0 0 {g(pe[r, 0])} {g(pe[r, 1])} {g(pe[r, 2])} {g(e4[r, 0])} "
+                             f"{g(MASS_ELECTRON)} {x}\n")
+                lines.append(f"{dm_status} {dm_pdg} 0 0 0 0 {g(pd[r, 0])} {g(pd[r, 1])} {g(pd[r, 2])} {g(d4[r, 0])} "
+                             f"{g(card.mass_dm)} {x}\n")
+            f.write("".join(lines))
+    return len(starts)

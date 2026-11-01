@@ -99,6 +99,32 @@ def test_hdf5_weights_sum_to_the_prediction(run, tmp_path, weighted):
         assert g["electron"].shape == (n, 4) and g["crossing"].shape == (n, 2)
 
 
+def test_hepevt_events_frame_and_units(run, tmp_path):
+    res = pipeline.finish(run)
+    rot = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])  # 90 degrees about z
+    origin = (1.0, 2.0, 400.0)
+    path = tmp_path / "events.hepevt"
+    n = output.write_hepevt(res, path, origin=origin, rotation=rot, length_unit="cm", time_unit="ns")
+    rows, event = output.accepted_events(res)
+    assert n == event[-1]
+    lines = path.read_text().splitlines()
+    heads = [i for i, l in enumerate(lines) if len(l.split()) == 2]
+    assert len(heads) == n and sum(int(lines[i].split()[1]) for i in heads) == 2 * len(rows)
+    parts = np.array([[float(v) for v in l.split()] for l in lines if len(l.split()) == 15])
+    el, dm = parts[0::2], parts[1::2]
+    assert (el[:, 0] == 1).all() and (el[:, 1] == 11).all() and (dm[:, 0] == 2).all() and (dm[:, 1] == 18).all()
+    c = res["candidates"]
+    np.testing.assert_allclose(el[:, 6:9], c["electron"][rows, 1:] @ rot.T, rtol=1e-9, atol=1e-12)
+    np.testing.assert_allclose(el[:, 9], c["electron"][rows, 0], rtol=1e-9)
+    np.testing.assert_allclose(dm[:, 6:9], c["recoil_dm"][rows, 1:] @ rot.T, rtol=1e-9, atol=1e-12)
+    vtx = c["vertex"][rows]
+    np.testing.assert_allclose(el[:, 11:14], (vtx[:, :3] - origin) @ rot.T * 100, rtol=1e-9, atol=1e-6)
+    np.testing.assert_allclose(el[:, 14], vtx[:, 3] * 1e9, rtol=1e-9, atol=1e-6)
+    np.testing.assert_array_equal(el[:, 11:15], dm[:, 11:15])
+    with pytest.raises(ValueError):
+        output.write_hepevt(pipeline.finish(run, weighted=True), tmp_path / "w.hepevt")
+
+
 def test_event_order_is_block_trial_slot(run):
     # two blocks with DM in both slots: rows come in block order, slot 0 then slot 1 within a block
     res = pipeline.finish(pipeline.candidates(CARD, 2 * rng.BLOCK, seed=5))

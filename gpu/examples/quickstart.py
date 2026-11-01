@@ -1,12 +1,15 @@
 """Run one parameter card through the JAX port and print the signal prediction.
 
 Usage: python examples/quickstart.py <card> [--trials N] [--parent-sampler stock|envelope] [--weighted]
-                                     [--text events.dat] [--summary summary.dat] [--hdf5 events.h5] [--save out.npz]
+                                     [--text events.dat] [--summary summary.dat] [--hdf5 events.h5]
+                                     [--hepevt events.hepevt] [--save out.npz]
 
 Prints the backend, the weighted and two-pass unweighted predicted signal events (`se`, as stock prints
 "Predicted number of signal events"), the accepted-event count and the throughput.
 - --text writes the accepted events in stock's comprehensive format, --summary appends stock's summary lines,
-  --hdf5 writes them as HDF5 (needs h5py); --weighted writes weighted events (one per DM) instead of unweighted.
+  --hdf5 writes them as HDF5 (needs h5py); --weighted writes weighted events (one per DM) instead of unweighted;
+  --hepevt writes the recoil electrons and DM as HEPEVT text for a detector simulation (beam frame, cm, ns; an
+  experiment integration passes its own detector frame to output.write_hepevt).
 - --save writes the pass-1 candidates (every DM that reaches the detector, with its recoil electron) as a shard
   that `bdnmc_jax.shards.load` can read.
 """
@@ -30,6 +33,7 @@ def main():
     ap.add_argument("--text", type=Path)
     ap.add_argument("--summary", type=Path)
     ap.add_argument("--hdf5", type=Path)
+    ap.add_argument("--hepevt", type=Path)
     ap.add_argument("--save", type=Path)
     args = ap.parse_args()
     t = time.perf_counter()
@@ -45,6 +49,8 @@ def main():
         print(f"{output.write_text(res, args.text, summary_path=args.summary)} events written to {args.text}")
     if args.hdf5:
         print(f"{output.write_hdf5(res, args.hdf5)} accepted DM written to {args.hdf5}")
+    if args.hepevt:
+        print(f"{output.write_hepevt(res, args.hepevt)} events written to {args.hepevt} (HEPEVT, beam frame)")
     if args.save:
         shards.save(cand, args.save)
         print(f"candidates saved to {args.save}")
