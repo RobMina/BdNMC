@@ -210,13 +210,13 @@ TIME_UNITS = {"s": 1.0, "ns": 1e9}  # per second
 
 
 def write_hepevt(res, path, origin=(0.0, 0.0, 0.0), rotation=None, length_unit="cm", time_unit="ns", dm_pdg=18,
-                 dm_status=2):
+                 dm_status=2, links="0 0 0 0"):
     """The accepted events as HEPEVT-style text, the input of detector simulations' text generators (LArSoft's
     TextFileGen, edep-sim's HEPEVT kinematics): per event a line `<event index> <number of particles>`, then one line
     per particle `status pdg mother1 mother2 daughter1 daughter2 px py pz E m x y z t`, momenta and masses in GeV.
     Each accepted DM contributes its recoil electron (status 1, PDG 11: tracked) and its recoil DM (status
     `dm_status`, PDG `dm_pdg`; 2 and 18 by default, so a simulation does not track it), both at the interaction point;
-    no mother/daughter links (zeros).
+    `links` fills the mother1 mother2 daughter1 daughter2 fields (no links; a reader may want e.g. "0 -1 -1 -1").
     The detector frame: position_det = rotation @ (position - origin) and momentum_det = rotation @ momentum, with
     `origin` (m) in BdNMC's beam frame and `rotation` a 3 x 3 matrix (identity by default); the experiment supplies
     both. Vertices are written in `length_unit` (m, cm or mm) and times in `time_unit` (s or ns). Unweighted results
@@ -241,9 +241,9 @@ def write_hepevt(res, path, origin=(0.0, 0.0, 0.0), rotation=None, length_unit="
             lines = [f"{i} {2 * (b - a)}\n"]
             for r in range(a, b):
                 x = " ".join(g(v) for v in (*pos[r], t[r]))
-                lines.append(f"1 11 0 0 0 0 {g(pe[r, 0])} {g(pe[r, 1])} {g(pe[r, 2])} {g(e4[r, 0])} "
+                lines.append(f"1 11 {links} {g(pe[r, 0])} {g(pe[r, 1])} {g(pe[r, 2])} {g(e4[r, 0])} "
                              f"{g(MASS_ELECTRON)} {x}\n")
-                lines.append(f"{dm_status} {dm_pdg} 0 0 0 0 {g(pd[r, 0])} {g(pd[r, 1])} {g(pd[r, 2])} {g(d4[r, 0])} "
+                lines.append(f"{dm_status} {dm_pdg} {links} {g(pd[r, 0])} {g(pd[r, 1])} {g(pd[r, 2])} {g(d4[r, 0])} "
                              f"{g(card.mass_dm)} {x}\n")
             f.write("".join(lines))
     return len(starts)
