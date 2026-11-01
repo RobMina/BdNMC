@@ -210,13 +210,16 @@ TIME_UNITS = {"s": 1.0, "ns": 1e9}  # per second
 
 
 def write_hepevt(res, path, origin=(0.0, 0.0, 0.0), rotation=None, length_unit="cm", time_unit="ns", dm_pdg=18,
-                 dm_status=2, links="0 0 0 0"):
+                 dm_status=2, links="0 0 0 0", per_interaction=False):
     """The accepted events as HEPEVT-style text, the input of detector simulations' text generators (LArSoft's
     TextFileGen, edep-sim's HEPEVT kinematics): per event a line `<event index> <number of particles>`, then one line
     per particle `status pdg mother1 mother2 daughter1 daughter2 px py pz E m x y z t`, momenta and masses in GeV.
     Each accepted DM contributes its recoil electron (status 1, PDG 11: tracked) and its recoil DM (status
     `dm_status`, PDG `dm_pdg`; 2 and 18 by default, so a simulation does not track it), both at the interaction point;
     `links` fills the mother1 mother2 daughter1 daughter2 fields (no links; a reader may want e.g. "0 -1 -1 -1").
+    An event holds every interaction of one BdNMC event (each particle line carries its own vertex); with
+    `per_interaction` each interaction is its own event instead, for readers that place all of an event's particles at
+    one vertex (edep-sim). HEPEVT event i is then accepted row i, whose BdNMC event is `accepted_events(res)[1][i]`.
     The detector frame: position_det = rotation @ (position - origin) and momentum_det = rotation @ momentum, with
     `origin` (m) in BdNMC's beam frame and `rotation` a 3 x 3 matrix (identity by default); the experiment supplies
     both. Vertices are written in `length_unit` (m, cm or mm) and times in `time_unit` (s or ns). Unweighted results
@@ -233,7 +236,10 @@ def write_hepevt(res, path, origin=(0.0, 0.0, 0.0), rotation=None, length_unit="
     t = vtx[:, 3] * TIME_UNITS[time_unit]
     e4, d4 = (np.asarray(c[k], dtype=float)[rows] for k in ("electron", "recoil_dm"))
     pe, pd = e4[:, 1:] @ rot.T, d4[:, 1:] @ rot.T
-    starts = np.flatnonzero(np.r_[True, event[1:] != event[:-1]]) if len(event) else np.zeros(0, int)
+    if per_interaction:
+        starts = np.arange(len(event))
+    else:
+        starts = np.flatnonzero(np.r_[True, event[1:] != event[:-1]]) if len(event) else np.zeros(0, int)
     ends = np.r_[starts[1:], len(event)]
     g = "{:.10g}".format
     with open(path, "w") as f:

@@ -121,6 +121,12 @@ def test_hepevt_events_frame_and_units(run, tmp_path):
     np.testing.assert_allclose(el[:, 11:14], (vtx[:, :3] - origin) @ rot.T * 100, rtol=1e-9, atol=1e-6)
     np.testing.assert_allclose(el[:, 14], vtx[:, 3] * 1e9, rtol=1e-9, atol=1e-6)
     np.testing.assert_array_equal(el[:, 11:15], dm[:, 11:15])
+    # per_interaction: one event per accepted DM, the same particle lines in the same order
+    one = tmp_path / "one.hepevt"
+    assert output.write_hepevt(res, one, origin=origin, rotation=rot, per_interaction=True) == len(rows)
+    lines1 = one.read_text().splitlines()
+    assert [l for l in lines1 if len(l.split()) == 2] == [f"{i} 2" for i in range(len(rows))]
+    assert [l for l in lines1 if len(l.split()) == 15] == [l for l in lines if len(l.split()) == 15]
     with pytest.raises(ValueError):
         output.write_hepevt(pipeline.finish(run, weighted=True), tmp_path / "w.hepevt")
 
