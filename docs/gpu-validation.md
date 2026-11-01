@@ -535,7 +535,8 @@ float64 runs):
 
 ## Unit tests
 
-`python -m pytest` in `gpu/` (about 2 min on G1, where compilation dominates):
+`python -m pytest` in `gpu/` (about 2 min on G1, where compilation dominates; CI runs it on every push and pull
+request, environment C1 in [test-environments.md](test-environments.md)):
 - **Parser:** stock quirks.
 - **Geometry:** sphere and cuboid path lengths against analytic results.
 - **Physics:**

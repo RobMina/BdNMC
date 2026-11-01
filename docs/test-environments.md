@@ -69,3 +69,14 @@ same.
 The whole-node comparison ran on one exclusive G1 node: 2 x AMD EPYC 7742 (128 cores, one thread per core), 8 x
 A100-SXM4-80GB, 2 TB RAM; stock in C1's container build, pinned one run per core
 ([gpu-performance.md](gpu-performance.md#p1-on-a-whole-idle-node-commit-c10833f)).
+
+## C1: continuous integration (GitHub Actions, `.github/workflows/ci.yml`)
+
+| Item | Value |
+|---|---|
+| Runner | GitHub-hosted `ubuntu-24.04` (x86-64), CPU only |
+| Stock | `build/makefile` with the runner's g++, `-O0` and `-O2`; a 2e5-trial run of the generic `mb_pi0` card (`gpu/phase0/cards/mb_pi0_m005.dat`) |
+| Port | Python 3.14 with `gpu/requirements-lock.txt`; the full unit-test suite (float64, with the float32 checks of `test_precision.py`) |
+| V0 | `libBdNMC.so` from branch `shared_library` built with g++ `-O2`, the V0 harness run against it, and `tests/test_v0.py` on that dump (`BDNMC_V0_DUMP`) instead of the committed laptop dump |
+
+GPU runs, V1/V2 and the benchmarks need GPUs and large samples and are not part of CI.

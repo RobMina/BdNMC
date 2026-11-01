@@ -1,0 +1,95 @@
+# Stock C++ build, the JAX port's tests on CPU, and V0 (the port against stock function values) with a Linux build
+# of stock. GPU runs, V1/V2 and the benchmarks need GPUs and large samples and stay outside CI (docs/gpu-validation.md).
+name: CI
+
+on:
+  push:
+    branches: [gpu-port]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stock:
+    name: stock build (g++ -${{ matrix.opt }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        opt: [O0, O2]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build
+        run: make -C build -j4 all CXXFLAGS="-std=c++14 -Wall -pedantic -${{ matrix.opt }}"
+      - name: Run a generic card (mb_pi0, 2e5 trials)
+        run: |
+          sed -e "s/^max_trials .*/max_trials 200000/" -e "s|^output_file .*|output_file ci_events.dat|" \
+              -e "s|^summary_file .*|summary_file ci_summary.dat|" gpu/phase0/cards/mb_pi0_m005.dat > ci_card.dat
+          build/main ci_card.dat
+          test -s ci_events.dat && test -s ci_summary.dat
+          cat ci_summary.dat
+
+  port:
+    name: JAX port tests (CPU)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: gpu
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: gpu/requirements-lock.txt
+      - name: Install
+        run: |
+          python -m pip install -r requirements-lock.txt
+          python -m pip install --no-deps -e .
+      - name: Tests
+        run: python -m pytest -q --durations=10
+
+  v0:
+    name: V0 against a Linux stock build (shared_library, -O2)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          ref: shared_library
+          path: stock
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: gpu/requirements-lock.txt
+      - name: Build stock libBdNMC
+        run: make -C stock/build -j4 libBdNMC.so CXXFLAGS="-std=c++14 -O2 -fPIC"
+      - name: Build and run the V0 harness
+        run: |
+          g++ -std=c++14 -O2 -Istock/src gpu/v0/v0_dump.cpp stock/build/libBdNMC.so -o v0_dump
+          (cd stock && LD_LIBRARY_PATH="$PWD/build" ../v0_dump) > v0_dump_linux.txt
+          wc -l v0_dump_linux.txt gpu/v0/v0_dump.txt
+      - name: Install the port
+        working-directory: gpu
+        run: |
+          python -m pip install -r requirements-lock.txt
+          python -m pip install --no-deps -e .
+      - name: V0 tests against the Linux dump
+        working-directory: gpu
+        env:
+          BDNMC_V0_DUMP: ${{ github.workspace }}/v0_dump_linux.txt
+        run: python -m pytest -q tests/test_v0.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v0_dump_linux
+          path: v0_dump_linux.txt
