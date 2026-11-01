@@ -5,6 +5,7 @@ import subprocess
 import sys
 
 import numpy as np
+import pytest
 
 import bdnmc_jax
 from bdnmc_jax import pipeline, shards
@@ -13,12 +14,21 @@ ROOT = Path(__file__).resolve().parents[1]
 CARD = ROOT / "phase0" / "cards" / "ref" / "mb_pi0_m005.dat"
 
 
-def run_block(tmp_path, precision):
-    out = tmp_path / f"{precision}.npz"
+def run_block(tmp_path, precision, card=CARD, sampler="stock", blocks=1):
+    out = tmp_path / f"{precision}_{sampler}_{Path(card).stem}.npz"
     env = os.environ | {"BDNMC_JAX_PRECISION": precision}
-    subprocess.run([sys.executable, str(ROOT / "validation" / "run_port.py"), str(CARD), "65536", "0", "1", str(out),
-                    "--seed", "11"], env=env, check=True, capture_output=True)
+    subprocess.run([sys.executable, str(ROOT / "validation" / "run_port.py"), str(card), str(65536 * blocks), "0",
+                    str(blocks), str(out), "--seed", "11", "--parent-sampler", sampler], env=env, check=True,
+                   capture_output=True)
     return shards.load(out)
+
+
+@pytest.mark.parametrize("card", [CARD, ROOT / "phase0" / "cards" / "ref" / "he_pi0_cuboid_m005.dat"])
+def test_float32_envelope_runs_within_its_bound(tmp_path, card):
+    # a float32 CDF cannot resolve the envelope's smallest cells; the integer CDF must keep every proposal under its
+    # bound (run_port fails on any proposal over the bar)
+    res = run_block(tmp_path, "float32", card, "envelope", blocks=4)
+    assert res["parent_over_bar"] == 0 and res["n_hits"] > 0
 
 
 def test_default_is_float64():

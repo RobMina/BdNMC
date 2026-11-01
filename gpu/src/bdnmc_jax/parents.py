@@ -235,11 +235,18 @@ class Envelope:
     dv: np.ndarray = field(compare=False, repr=False)
     bound: np.ndarray = field(compare=False, repr=False)
     cdf: np.ndarray = field(compare=False, repr=False)
+    # float32 only: the cell is chosen with 32 random bits against this integer CDF (a float32 CDF resolves only
+    # ~6e-8, and half the cells of the geometric v grid are smaller); None in float64
+    icdf: np.ndarray = field(default=None, compare=False, repr=False)
 
     def propose(self, key, pool):
         u = jax.random.uniform(key, (pool, 3), dtype=rng.FLOAT)
         n_v = len(self.v_lo)
-        cell = jnp.minimum(jnp.searchsorted(jnp.asarray(self.cdf), u[:, 0], side="right"), len(self.cdf) - 1)
+        if self.icdf is None:
+            cell = jnp.minimum(jnp.searchsorted(jnp.asarray(self.cdf), u[:, 0], side="right"), len(self.cdf) - 1)
+        else:
+            bits = jax.random.bits(jax.random.fold_in(key, 1), (pool,), dtype=jnp.uint32)
+            cell = jnp.minimum(jnp.searchsorted(jnp.asarray(self.icdf), bits, side="right"), len(self.icdf) - 1)
         ip, iv = cell // n_v, cell % n_v
         p = jnp.asarray(self.p_lo)[ip] + u[:, 1] * jnp.asarray(self.dp)[ip]
         v = jnp.asarray(self.v_lo)[iv] + u[:, 2] * jnp.asarray(self.dv)[iv]
@@ -266,13 +273,29 @@ def make_envelope(base, n_p=256, n_v=128, v_min=1e-5, n_sub=6, margin=1.2, n_che
     bound = np.maximum(cmax * margin, np.finfo(float).tiny).ravel()
     w = bound * area.ravel()
     cdf = np.cumsum(w) / w.sum()
+    icdf = None
+    if rng.FLOAT == np.float32:
+        # A float32 CDF resolves ~6e-8, and half the cells are smaller: the cell is drawn from 32 random bits against
+        # integer counts instead. Counts are rounded up (every cell keeps a nonzero probability, and its bound, rebuilt
+        # from the count so that proposal and bound agree exactly, stays >= cmax x margin x (1 - n / 2^32)).
+        top, n = 2 ** 32, len(w)
+        cnt = np.ceil(w / w.sum() * (top - n)).astype(np.int64)
+        cnt[np.argmax(cnt)] += top - cnt.sum()
+        icdf = np.cumsum(cnt)[:-1].astype(np.uint32)  # cell k: icdf[k-1] <= bits < icdf[k]
+        bound = cnt / top * w.sum() / area.ravel()
+        if not (bound >= cmax.ravel()).all():
+            raise RuntimeError("float32 envelope: a cell's bound is below its sub-grid maximum")
     env = Envelope(base, "", float((cmean * area).sum() / w.sum()),
                    p_e[:-1].copy(), np.diff(p_e), v_e[:-1].copy(), np.diff(v_e), bound, cdf)
-    digest = hashlib.sha256(b"".join(a.tobytes() for a in (env.p_lo, env.dp, env.v_lo, env.dv, bound, cdf))).hexdigest()
-    env = Envelope(base, digest, env.efficiency, env.p_lo, env.dp, env.v_lo, env.dv, bound, cdf)
+    digest = hashlib.sha256(b"".join(a.tobytes() for a in (env.p_lo, env.dp, env.v_lo, env.dv, bound, cdf)
+                                     + (() if icdf is None else (icdf,)))).hexdigest()
+    env = Envelope(base, digest, env.efficiency, env.p_lo, env.dp, env.v_lo, env.dv, bound, cdf, icdf)
     # Check the bound on random points, cell by cell (uniform within cells, cells chosen like the sampler does).
     rs = np.random.default_rng(seed)
-    cell = np.minimum(np.searchsorted(cdf, rs.random(n_check), side="right"), len(cdf) - 1)
+    if icdf is None:
+        cell = np.minimum(np.searchsorted(cdf, rs.random(n_check), side="right"), len(cdf) - 1)
+    else:
+        cell = np.searchsorted(icdf, rs.integers(0, 2 ** 32, n_check, dtype=np.uint64), side="right")
     ip, iv = cell // n_v, cell % n_v
     pp = env.p_lo[ip] + rs.random(n_check) * env.dp[ip]
     vv = env.v_lo[iv] + rs.random(n_check) * env.dv[iv]
