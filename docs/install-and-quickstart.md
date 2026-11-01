@@ -142,7 +142,7 @@ arrives; `output.collect(res)` joins them in memory instead.
 **From Python:**
 
 ```python
-import bdnmc_jax                       # enables float64
+import bdnmc_jax                       # float32 by default (BDNMC_JAX_PRECISION=float64 for float64)
 from bdnmc_jax import pipeline
 
 res = pipeline.run("phase0/cards/ref/he_pi0_cuboid_m005.dat", n_trials=1 << 24, batch=64)
@@ -156,9 +156,12 @@ electrons = c["electron"][res["accepted_mask"]]
   run is identical to a single-process run.
 - **`batch`:** 2^16-trial blocks per device call (8 by default). Use 64-256 on an A100; it does not change the
   results.
-- **Precision:** float64 by default, the validated configuration. `BDNMC_JAX_PRECISION=float32` in the
-  environment, before `bdnmc_jax` is first imported, runs the device code in float32 for GPUs without fast float64;
-  it is not validated, and its measured cost is in [gpu-validation.md](gpu-validation.md#float32).
+- **Precision:** float32 by default (since `3c54e7e`): 1.4-2x faster than float64 on an A100 or V100 and 2.3-10x on
+  GPUs with slow float64, and within about 0.1 % of float64 in rate and in every validated distribution (it did not
+  pass the pre-declared validation rule on single statistics; [gpu-validation.md](gpu-validation.md#float32)).
+  `BDNMC_JAX_PRECISION=float64` in the environment, before `bdnmc_jax` is first imported, runs in float64, the
+  configuration that passes V1/V2 under the frozen rules; `bdnmc_jax.PRECISION` and every result, shard and HDF5 file
+  record which one ran. The test suite runs in float64.
 - **Mass scans:** masses are runtime inputs, so the cards of a scan share the compiled kernel;
   `validation/run_grid.py` runs a grid of base cards and masses to a target number of accepted events each.
 
@@ -173,7 +176,7 @@ electrons = c["electron"][res["accepted_mask"]]
 | masses, meson decays | 2 m_chi < m_meson. Stock's choice between the on-shell `DecayDM` and the off-shell `DecayDM_Off_Shell` (meson -> gamma V* -> gamma chi chi) is reproduced: off-shell when the total branching ratio exceeds 1.3x the on-shell one, except when 2 m_chi <= m_V < m_meson with 2 m_chi >= 0.97 m_V |
 | masses, `proton_brem` | 2 m_chi < m_V |
 | `proton_brem` window | `zmin`, `zmax`, `ptmax` (and `ptmin`, default 0) in the channel block, with 0 <= `zmin` <= `zmax` and `ptmin` <= `ptmax`; otherwise an error (stock continues with a zero-rate channel) |
-| `parent_sampler` (port option) | `"envelope"` works for the analytic meson distributions (validated for pi0 and on-shell eta; not run with off-shell decays); refused for `particle_list` and `proton_brem` |
+| `parent_sampler` (port option) | `"envelope"` works for the analytic meson distributions (validated for pi0 and on-shell eta; not run with off-shell decays) and for `proton_brem` (validated); refused for `particle_list` |
 | `signal_channel` | `NCE_electron` |
 | `detector` | `sphere`, `cuboid` (rotations included) |
 | `timing_cut` | must be 0 (unset) |

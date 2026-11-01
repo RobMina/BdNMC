@@ -19,7 +19,11 @@ borderline on the fourth:
 | `he_brem_cuboid` | 269x / 596x | (not ported) |
 
 `mb_brem` writes 5.9 M rows (1.4 GB) per 6.7e7 trials; its rate is set by the host side and varies by about ±10 % even
-on an idle node ([below](#accepted-rows-gathered-on-the-device-commits-3f3993a-to-85db916)). The whole-node figure
+on an idle node ([below](#accepted-rows-gathered-on-the-device-commits-3f3993a-to-85db916)). Since this table, pass 2
+moved to the device (`929f2dd`): `mb_brem` gained 9-15 % in same-node comparisons, to 97-108x
+([below](#pass-2-on-the-device-commit-929f2dd)). **float32, the default since `3c54e7e`, is 1.6-2.0x faster again on
+the A100** (`mb_brem` about 210x, `he_brem` about 550x; [below](#float32-and-float64-on-seven-gpu-types-commit-929f2dd)).
+The whole-node figure
 (8 GPUs against 128 stock cores of the same node) is 38-52x on three cards and 7.5x on `mb_brem`. Not yet measured:
 a MIG slice.
 
@@ -212,8 +216,8 @@ speed-up over one L1 core of stock `-O2`:
   envelope sampler, sets the pace.
 - The V100 (full-rate FP64) runs at 55-75 % of the A100.
 - The RTX 2080 Ti (11 GB) runs out of device memory at batch 256.
-- A float32 mode exists for GPUs without fast FP64 (`BDNMC_JAX_PRECISION=float32`, see
-  [gpu-validation.md](gpu-validation.md#float32)); none of these figures use it.
+- These figures are float64 (`BDNMC_JAX_PRECISION=float64`). float32, now the default, is timed
+  [below](#float32-and-float64-on-seven-gpu-types-commit-929f2dd).
 
 ## Where the time goes
 
@@ -245,6 +249,65 @@ end-to-end), against 17-23 % with the stock sampler at batch 64.
 
 - A MIG slice.
 - float32 throughput (in progress).
+
+### Pass 2 on the device, commit `929f2dd`
+
+`pipeline.events` now does pass 2 on the device as well: the accept against the run's maximum probability, the sort
+into output order and the event numbering; only counts, the accepted rows and the angle-cut rows' probabilities
+(for the weighted sum, kept on the host so the result is unchanged to the bit) are copied. `mb_brem` on an
+A100-80GB, three jobs on one node, five interleaved repeats each against `50017f0` (streamed write), medians of the
+end-to-end rate: 43.8 -> 49.3, 40.6 -> 44.4, 42.2 -> 48.5 M trials/s (+9 to +15 %), that is 3.9-4.4 M accepted/s,
+97-108x one L1 core.
+
+### float32 and float64 on seven GPU types, commit `929f2dd`
+
+`bench.py --write hdf5`, best of batch 64 and 256, both precisions interleaved in each job (one job per GPU type and
+card pair, shared nodes). Accepted events per second, **float64 / float32**:
+
+| GPU | `mb_pi0` | `mb_pi0` envelope | `mb_brem` | `he_pi0_cuboid` | `he_pi0` envelope | `he_brem_cuboid` |
+|---|---|---|---|---|---|---|
+| A100-SXM4-80GB | 110 k / 201 k | 173 k / (*) | 4.84 M / 8.64 M | 218 k / 425 k | 1.60 M / 2.50 M | 2.59 M / 4.77 M |
+| A100-SXM4-40GB | 104 k / 176 k | 154 k / (*) | 5.81 M / 9.21 M | 198 k / 380 k | 1.70 M / 2.35 M | 2.65 M / 4.77 M |
+| V100-SXM2-32GB | 75 k / 102 k | 117 k / (*) | 3.60 M / 5.55 M | 122 k / 247 k | 1.00 M / 1.43 M | 1.66 M / 3.28 M |
+| RTX A6000 | 17.8 k / 146 k | 60.8 k / (*) | 2.57 M / 7.29 M | 26.0 k / 234 k | 695 k / 1.59 M | 571 k / 3.49 M |
+| RTX 3090 | 17.9 k / 153 k | 62.2 k / (*) | 2.55 M / 6.97 M | 26.4 k / 274 k | 680 k / 1.58 M | 575 k / 3.47 M |
+| A40 | 16.2 k / 116 k | 55.2 k / (*) | 2.54 M / 6.78 M | 23.6 k / 203 k | 641 k / 1.68 M | 516 k / 3.26 M |
+| RTX 2080 Ti | 13.3 k / 113 k | 39.4 k / (*) | 2.19 M / 5.63 M | 20.4 k / 184 k | 482 k / 1.31 M | 445 k / 2.57 M |
+
+- float32 is 1.4-2.0x faster on the A100s and the V100, and 2.3-10x on the GPUs whose float64 runs at 1/32 rate;
+  with it those GPUs reach 45-85 % of an A100 in float32.
+- (*) The `mb_pi0` envelope sampler stopped in float32 in these jobs: a float32 CDF cannot resolve its smallest
+  cells, so proposals and bounds disagreed. Fixed in `4c484cc` (the cell is drawn from 32 random bits against
+  integer counts); not re-timed yet.
+- On the A100 in float32, against one L1 core of stock `-O2`: `mb_pi0` 301x, `mb_brem` 213x, `he_pi0` 238x,
+  `he_brem` 548x, `he_pi0` envelope 1,400x. The physics of float32 against float64 is in
+  [gpu-validation.md](gpu-validation.md#float32).
+
+### Proton-brem envelope sampler, branch `brem-envelope` (merged)
+
+`parent_sampler="envelope"` for proton brem (128 x 128 cells in (z, pT), per-mass tables passed as traced arrays,
+so masses still share one compilation): about 1.5 proposals per accepted V against 8 (`mb_brem`) and 97
+(`he_brem_cuboid`) for stock's proposal. `bench.py --write hdf5 --cap 16384`, float64, stock and envelope
+interleaved, M trials/s end to end:
+
+| GPU | Card, batch | stock | envelope | device only, stock / envelope |
+|---|---|---|---|---|
+| A100-80GB | `he_brem_cuboid`, 64 | 24.5 / 25.3 | 42.1 / 43.7 | 50 / 155-181 |
+| A100-80GB | `mb_brem`, 64 | 37.1 / 44.6 | 39.7 / 43.2 | 218-225 / 255-268 |
+| V100 | `he_brem_cuboid`, 64 | 16.6 / 16.6 | 27.1 / 28.0 | 28 / 84 |
+| V100 | `mb_brem`, 256 | 30.0 / 30.4 | 31.2 / 30.9 | 141-144 / 147-150 |
+
+The sampler is about 3x faster on the device, so `he_brem_cuboid` gains 1.6-1.7x end to end (2.1 -> 3.5-3.7 M
+accepted/s on the A100); `mb_brem` is host-bound and does not change. Validated V1/V2: see
+[gpu-validation.md](gpu-validation.md#proton-bremsstrahlung).
+
+### Weighted events (option B)
+
+`bench.py --weighted` writes every DM that passes the angle cuts, with its weight, instead of the unweighted sample
+(V100, float64, `b5531c6`, two interleaved repeats, accepted rows per second weighted / unweighted): `mb_pi0` 2.7x,
+`he_pi0_cuboid` 2.1x, `he_brem_cuboid` 1.5x, `mb_brem` 1.0-1.1x (host-bound). The gain is the inverse of the
+unweighting efficiency where the device sets the pace; downstream tools that need unweighted events can unweight
+against the run's maximum.
 
 ## P1 on a whole, idle node, commit `c10833f`
 

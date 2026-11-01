@@ -48,9 +48,11 @@ parameter cards and is validated statistically against this code.
 
 **Output:** stock's text event format or HDF5.
 
-**Throughput:** on one NVIDIA A100, with HDF5 output, 120-820x one core of an optimised stock build on the pi0
-cards (depending on the card and the parent sampler), and 96-269x on the brem cards; a V100 runs at 55-75 % of
-that. A whole 8-GPU node does 7.5-52x the work of its 128 CPU cores running stock. See [gpu/README.md](gpu/README.md).
+**Throughput:** on one NVIDIA A100, with HDF5 output, in float64 (the validated configuration) 120-820x one core of
+an optimised stock build on the pi0 cards (depending on the card and the parent sampler) and 96-269x on the brem
+cards; in float32, the default, about 1.6-2x more (213-548x on the brem cards). A V100 runs at 55-75 % of an A100.
+A whole 8-GPU node does 7.5-52x the work of its 128 CPU cores running stock (float64). See
+[gpu/README.md](gpu/README.md).
 
 ## Layout
 

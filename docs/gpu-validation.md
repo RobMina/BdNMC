@@ -23,7 +23,9 @@ cuboid detectors; `NCE_electron`.
 - **float32** (`BDNMC_JAX_PRECISION=float32`, for GPUs without fast float64), with four float32-safe rewrites, agrees
   with float64 rates within about 0.1 % and in every distribution, in two independent samples. It missed single
   statistics in both, by a few percent of their limits (as the float64 control also did in the repeat), so under
-  the pre-declared rule it is not a validated configuration ([below](#float32)).
+  the pre-declared rule it is not a validated configuration ([below](#float32)). It is nevertheless the default
+  since `3c54e7e`, by the user's decision; `BDNMC_JAX_PRECISION=float64` selects the validated configuration.
+- **All V1/V2 results above are float64** (set explicitly in the validation jobs).
 - **Not validated yet:** other detectors, signals and models ([list](#not-validated-yet)).
 - **Event output** (text and HDF5) is tested for format and content ([Unit tests](#unit-tests)); it does not change
   the physics.
@@ -294,7 +296,25 @@ Per point, V1:
   slice (0.0019). The fourth is theta_e in the third E_e slice at `mb_brem` 45 MeV (0.0039). The largest tail pull is
   E_e at `he_brem` 1 MeV (+2.70). `mb_brem` 20 MeV is the point to watch in a repeat.
 - **No proposal exceeded the fixed bar** at any point.
-- **Scope:** the envelope sampler is not ported for brem; `setup` refuses it.
+
+**The envelope sampler for brem** (`parent_sampler="envelope"`, commit `d6bea9f`): a piecewise-constant bound on a
+128 x 128 (z, pT) grid (z bins equal, pT bins equal in log(pT - ptmin + c0)), each cell's bound the maximum on a 6 x 6
+sub-grid x 1.2; cells are chosen by bound x area and points accepted against shape / bound, so the law is stock's.
+Its tables are built per mass and passed as traced arrays (no recompilation per mass).
+- **Pre-declared** in `gpu/validation/v_rerun_envelope_brem_20261031.json` before any job (criteria
+  `v_config_brem.json` unchanged; one repeat at seed offset 1e6 only if the first run failed).
+- **Parent law** (`validation/compare_parent_samplers.py`, 1.0e8 parents per sampler on a V100): z, pT, log pT, V
+  momentum and angle and the joint (z, pT) histogram agree with stock's proposal, p 0.06-0.99; no proposal above its
+  cell's bound.
+- **V1/V2 against stock, first run (V100, float64): pass.** V1 max |pull| 1.75, mean +0.05, chi2 p 0.76. V2: KS of
+  the 112 p-values against uniform 0.0146 (limit 0.01: the closest statistic to its limit), smallest p 0.0080, max
+  tail pull 1.62, nothing failed closed; within 0.13 % of stock unweighted `se` at every point; `parent_over_bar` = 0
+  in all 32 shards.
+- Unit tests check the bound on 400 k points per card and mass, the law against stock's proposal, batch independence
+  and that a second mass compiles nothing (`gpu/tests/test_brem_envelope.py`).
+- **A small reproducibility caveat** found by those tests, with either sampler: on CPU, 3-4 of about 126 k brem
+  `electron`/`recoil_dm` values differ in the last bit between batch 1/cap 64 and batch 3/cap 8192 (everything
+  upstream is bit-identical); that test uses rtol 1e-15 for those two keys.
 
 ### Eta decay
 
@@ -429,9 +449,11 @@ the seed-offset float64 control [below](#float32).
 
 ## float32
 
-`BDNMC_JAX_PRECISION=float32`, set before `bdnmc_jax` is first imported, runs the device code in float32 (JAX's
-64-bit mode off); host-side setup, pass 2 and the sums stay in float64. It is meant for endpoints without fast
-float64, and it is not a validated configuration. Its cost is measured three ways:
+float32 runs the device code with JAX's 64-bit mode off; host-side setup, pass 2 and the sums stay in float64. It is
+**the default since `3c54e7e`** (the user's decision, on the results below: it is 1.4-10x faster depending on the GPU
+and agrees with float64 within about 0.1 %, although it did not pass the pre-declared rule);
+`BDNMC_JAX_PRECISION=float64`, set before `bdnmc_jax` is first imported, gives float64, the configuration that passes
+V1/V2 under the frozen rules. Results and HDF5 files record their precision. Its cost is measured three ways:
 `validation/precision_v0.py` (the V0 function checks as a per-function error report), the five V sets against
 stock with the frozen configs, and `validation/compare_precision.py` (float32 against float64 run with the same
 points and seeds; the two precisions draw different random bits, so the samples are independent).
@@ -572,7 +594,7 @@ copied into that job's code tree.
 
 ## Not validated yet
 
-- the envelope sampler with off-shell decays or with `particle_list` (not run), and for `proton_brem` (not ported);
+- the envelope sampler with off-shell decays or with `particle_list` (not run), and the brem envelope in float32;
 - off-shell eta decay in V1/V2 (only pi0 has reference points);
 - V2 of the parent histograms for `particle_list` (see [above](#particle_list));
 - cylinder detectors, timing cuts, `dist_mod`, signal channels other than `NCE_electron`, and models other than

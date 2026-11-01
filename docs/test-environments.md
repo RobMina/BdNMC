@@ -25,7 +25,7 @@ pages names its environment by the label used here.
 | Host | x86-64 node; each job allocated 8 CPU cores and 64 GB RAM |
 | Python | 3.14.9 (a virtual environment on the cluster's scratch file system) |
 | Python packages | `jax` 0.12.0.1 with `jax-cuda12-plugin` and `jax-cuda12-pjrt` 0.12.0.1 (CUDA runtime 12.9.79 from the pip wheels), `numpy` 2.5.4, `scipy` 1.18.1, `pytest` 9.2.0 |
-| JAX settings | float64 unless a result says float32 (`BDNMC_JAX_PRECISION`); `XLA_PYTHON_CLIENT_PREALLOCATE=false`; every job checks `jax.default_backend() == "gpu"` before starting |
+| JAX settings | float64 unless a result says float32 (`BDNMC_JAX_PRECISION`; the package default is float32 since `3c54e7e`, the jobs set it explicitly); `XLA_PYTHON_CLIENT_PREALLOCATE=false`; every job checks `jax.default_backend() == "gpu"` before starting |
 | Code | a `git archive` of one commit of this branch per job; the stock reference data (event summaries and logs, about 1 GB) copied next to it |
 
 The same JAX, NumPy and SciPy versions are used on L1 and G1, so differences between them come from the backend

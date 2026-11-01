@@ -29,9 +29,10 @@ generic, experiment-independent parameter cards.
 - **Mass grid:** the ten generic base cards x 20 masses x 80k accepted events, HDF5 written, in 321 s end to end
   on one A100 (0.09 GPU-hours), with no recompilation for a new mass
   ([docs](../docs/gpu-performance.md#p2-a-mass-grid-in-one-gpu-hour)).
-- **float32:** `BDNMC_JAX_PRECISION=float32` for GPUs without fast float64; not validated, cost measured in the
-  [docs](../docs/gpu-validation.md#float32).
-- **Not yet ported:** other channels, models and signals; the envelope sampler for brem.
+- **Precision:** float32 by default (1.4-2x faster on A100/V100, 2.3-10x on GPUs with slow float64; within about
+  0.1 % of float64, but not passed under the frozen validation rule); `BDNMC_JAX_PRECISION=float64` for float64, the
+  configuration validated above ([docs](../docs/gpu-validation.md#float32)).
+- **Not yet ported:** other channels, models and signals.
 
 | Page | Content |
 |---|---|
