@@ -114,11 +114,14 @@ def test_envelope_samples_the_stock_law(stem):
     assert stats.chi2.sf(chi2, len(a) - 1) > 1e-3
 
 
-# The recoil electron (and Recoil_DM = DM - electron) can differ in the last bit between batch/cap shapes on CPU,
-# with either sampler (XLA's codegen of the recoil kinematics depends on the array length). On x86-64 (the CI
-# runner) prob differs too, by up to 8.4e-12 relative in about 2 % of the candidates. Everything else, the sampled V
-# and DM and the candidate set included, is bit-identical.
-RTOL = {"electron": 1e-15, "recoil_dm": 1e-15, "prob": 1e-10}
+# On the GPU (V100, float64 and float32) every brem array is bit-identical between batch/cap shapes. On CPU XLA's
+# code for the V -> chi chi decay depends on the number of blocks per call, so with either sampler the DM differ in
+# the last bits for about 3 % of the candidates (arm64: only the electron and Recoil_DM showed it), and quantities
+# downstream inherit it (x86-64, validation/batch_invariance.py: DM 7e-13, electron 2e-9, prob and L 1.8e-7 relative,
+# at a grazing crossing where L is 4e-9 m). The candidate set, the parent, the V and the random numbers stay
+# bit-identical; the floats are compared at rtol 1e-6, with 1e-8 m absolute for lengths.
+EXACT = ("block", "trial", "slot", "ang_ok", "u_acc", "parent", "mediator")
+ATOL_M = {"L": 1e-8, "crossing": 1e-8, "vertex": 1e-8}
 
 
 @pytest.mark.parametrize("sampler", ["stock", "envelope"])
@@ -128,11 +131,13 @@ def test_batch_and_cap_do_not_change_results(sampler):
     b = pipeline.candidates(card, n, seed=11, batch=3, cap=8192, parent_sampler=sampler)
     assert a["parent_over_bar"] == b["parent_over_bar"] == 0 and a["parent_sampler"] == sampler
     assert len(a["candidates"]["prob"]) > 0
+    assert a["candidates"].keys() == b["candidates"].keys()
     for k in a["candidates"]:
-        if k in RTOL:
-            np.testing.assert_allclose(a["candidates"][k], b["candidates"][k], rtol=RTOL[k], atol=1e-17, err_msg=k)
-        else:
+        if k in EXACT:
             np.testing.assert_array_equal(a["candidates"][k], b["candidates"][k], err_msg=k)
+        else:
+            np.testing.assert_allclose(a["candidates"][k], b["candidates"][k], rtol=1e-6, atol=ATOL_M.get(k, 0),
+                                       err_msg=k)
     c = pipeline.candidates(card, n, seed=12, batch=3, cap=8192, parent_sampler=sampler)["candidates"]
     assert not np.array_equal(c["dm"][:10], b["candidates"]["dm"][:10])
 

@@ -312,12 +312,16 @@ Its tables are built per mass and passed as traced arrays (no recompilation per 
   in all 32 shards.
 - Unit tests check the bound on 400 k points per card and mass, the law against stock's proposal, batch independence
   and that a second mass compiles nothing (`gpu/tests/test_brem_envelope.py`).
-- **A small reproducibility caveat** found by those tests, with either sampler: on CPU, 3-4 of about 126 k brem
-  `electron`/`recoil_dm` values differ in the last bit between batch 1/cap 64 and batch 3/cap 8192 (everything
-  upstream is bit-identical); that test uses rtol 1e-15 for those two keys. On x86-64 (the CI runner) `prob` also
-  differs, by up to 8.4e-12 relative in about 2 % of the candidates, so the test allows 1e-10 for it; the candidate
-  sets stay identical. An accepted event could in principle change between batch shapes, with probability of order
-  1e-11 per candidate.
+- **A small reproducibility caveat, CPU only** (found by those tests, with either sampler; measured with
+  `validation/batch_invariance.py`, batch 1/cap 64 against batch 3/cap 8192, 3 blocks):
+  - On the GPU (V100, float64 and float32) every brem and pi0 array is bit-identical between the two settings.
+  - On CPU the candidate sets, parents, V and random numbers stay bit-identical, but XLA's code for brem's
+    V -> chi chi decay depends on the number of blocks per call: on x86-64 (Xeon Gold 6248) the DM four-momenta of
+    about 3 % of the candidates differ by up to 7e-13 relative, and downstream quantities inherit it (electron
+    2e-9, `prob` and `L` up to 1.8e-7 relative at a grazing crossing where `L` is 4e-9 m; vertex 2e-9 m). On
+    arm64 (L1) only the electron and Recoil_DM showed it, in the last bit. pi0 is bit-identical on both.
+  - The test compares those floats at rtol 1e-6 (1e-8 m absolute for lengths). On CPU an accepted brem event can
+    in principle change between batch shapes, with odds of order 1e-7 per candidate at most.
 
 ### Eta decay
 
@@ -525,8 +529,10 @@ float64 runs):
 ## Reproducibility
 
 - **Per seed:** results do not depend on the batch size (blocks per device call), the candidate cap or the split
-  into shards; tests check this bit for bit on CPU. The exception is proton brem, whose `electron`, `recoil_dm`
-  and (on x86-64) `prob` values can differ in the last bits between batch shapes (see the brem envelope section).
+  into shards; tests check this bit for bit on CPU, and on the GPU it holds bit for bit for the brem and pi0 cards
+  measured (V100, both precisions).
+  The exception is proton brem on CPU, whose DM and downstream values can differ in the last bits between batch
+  shapes (see the brem envelope section).
   Each 2^16-trial block's random numbers depend only on (seed, channel, block).
 - **GPU against CPU:** with the stock sampler, the GPU runs give the same number of detector hits and accepted
   events at all eight pi0 points as the CPU run, and `se` within 6e-14 relative. (Brem, eta, `particle_list` and
