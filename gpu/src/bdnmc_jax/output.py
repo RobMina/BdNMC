@@ -166,7 +166,8 @@ def write_hdf5(res, path, extra_attrs=None):
                  "n_trials": res["n_trials"], "trials": res["trials"], "vnum": res["vnum"],
                  "efficiency": res["efficiency"], "se": res["se"], "se_weighted": res["se_weighted"],
                  "pmax": res["pmax"], "weighted": bool(res.get("weighted", False)),
-                 "parent_sampler": res.get("parent_sampler", "stock"), "n_hits": res["n_hits"]}
+                 "parent_sampler": res.get("parent_sampler", "stock"), "precision": res.get("precision", "float64"),
+                 "n_hits": res["n_hits"]}
         for k, v in (attrs | (extra_attrs or {})).items():
             f.attrs[k] = v
         g = f.create_group("accepted")

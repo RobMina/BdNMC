@@ -31,8 +31,17 @@ def test_float32_envelope_runs_within_its_bound(tmp_path, card):
     assert res["parent_over_bar"] == 0 and res["n_hits"] > 0
 
 
-def test_default_is_float64():
-    assert bdnmc_jax.PRECISION == "float64"
+def test_the_suite_runs_in_float64_and_the_default_is_float32(tmp_path):
+    assert bdnmc_jax.PRECISION == "float64"  # pinned by conftest.py
+    env = {k: v for k, v in os.environ.items() if k != "BDNMC_JAX_PRECISION"}
+    r = subprocess.run([sys.executable, "-c", "import bdnmc_jax; print(bdnmc_jax.PRECISION)"], env=env,
+                       capture_output=True, text=True, cwd=ROOT / "src", check=True)
+    assert r.stdout.strip() == "float32"
+
+
+def test_results_record_their_precision(tmp_path):
+    assert run_block(tmp_path, "float32")["precision"] == "float32"
+    assert pipeline.candidates(CARD, 65536, seed=11)["precision"] == "float64"
 
 
 def test_float32_run_is_float32_and_finite(tmp_path):

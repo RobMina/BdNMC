@@ -20,6 +20,7 @@ import numpy as np
 
 from . import (branching, brem, card as cardmod, decay, detector, electron, offshell, output, parents, particle_list,
                rng)
+from . import PRECISION
 from .constants import MASS_ELECTRON as Me, MASS_PION_NEUTRAL, MASS_ETA, pi, speed_of_light
 from .kinematics import momentum, phi, rotate_y, rotate_z, theta
 
@@ -368,7 +369,7 @@ def _result(card_path, card, seed, ch, blocks, n_trials, batch, parent_sampler, 
     return {"card": str(card_path), "seed": seed, "n_trials": n_trials, "blocks": [blocks.start, blocks.stop],
             "trials": trials, "n_hits": stats["n_hits"], "prob_sum": stats["prob_sum"],
             "parent_over_bar": stats["over_bar"], "vnum": ch.vnum, "efficiency": card.efficiency, "batch": batch,
-            "cap": stats["cap"], "parent_sampler": parent_sampler, "candidates": cat}
+            "cap": stats["cap"], "parent_sampler": parent_sampler, "precision": PRECISION, "candidates": cat}
 
 
 def candidates(card_path, n_trials, seed=None, blocks=None, batch=8, cap=1024, parent_sampler="stock"):
@@ -506,7 +507,8 @@ def events(card_path, n_trials, seed=None, weighted=False, batch=8, cap=1024, pa
 def merge(shards):
     """Combine pass-1 shards of one run (disjoint block ranges, same card, seed and n_trials)."""
     first = shards[0]
-    run_id = lambda s: (s["card"], s["seed"], s["n_trials"], s.get("parent_sampler", "stock"))  # noqa: E731
+    run_id = lambda s: (s["card"], s["seed"], s["n_trials"], s.get("parent_sampler", "stock"),  # noqa: E731
+                        s.get("precision", "float64"))  # shards from before the switch are float64
     for s in shards:
         if run_id(s) != run_id(first):
             raise ValueError("shards from different runs")
