@@ -15,6 +15,7 @@ From: gcc:14.2.0
 %post
     git clone https://github.com/RobMina/BdNMC.git /opt/BdNMC-src
     git -C /opt/BdNMC-src checkout "{{ BDNMC_REF }}"
+    git -C /opt/BdNMC-src submodule update --init  # most stock sources are in BdNMC_LANL (lanl/BdNMC_LANL)
     cd /opt/BdNMC-src/build
     make CXXFLAGS="-std=c++14 -O2 -fPIC" -j"$(nproc)" all
     make install PREFIX=/opt/bdnmc
