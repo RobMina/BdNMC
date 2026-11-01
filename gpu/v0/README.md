@@ -15,6 +15,9 @@ Build, with `BDNMC_SRC` the BdNMC source tree and `STOCK` the directory of its `
 c++ -std=c++14 -O2 -I"$BDNMC_SRC/src" v0/v0_dump.cpp "$STOCK/libBdNMC.so" -o v0/v0_dump
 ```
 
+(on Linux link with `-L"$STOCK" -lBdNMC` instead: the library has no soname, so linking it by path records that
+path in the binary).
+
 Run from the BdNMC source root (stock opens `data/*.dat` relative to the working directory); on Linux use
 `LD_LIBRARY_PATH`:
 

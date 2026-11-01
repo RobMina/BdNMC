@@ -78,7 +78,7 @@ jobs:
         run: make -C stock/build -j4 libBdNMC.so CXXFLAGS="-std=c++14 -O2 -fPIC"
       - name: Build and run the V0 harness
         run: |
-          g++ -std=c++14 -O2 -Istock/src gpu/v0/v0_dump.cpp stock/build/libBdNMC.so -o v0_dump
+          g++ -std=c++14 -O2 -Istock/src gpu/v0/v0_dump.cpp -Lstock/build -lBdNMC -o v0_dump
           (cd stock && LD_LIBRARY_PATH="$PWD/build" ../v0_dump) > v0_dump_linux.txt
           wc -l v0_dump_linux.txt gpu/v0/v0_dump.txt
       - name: Install the port

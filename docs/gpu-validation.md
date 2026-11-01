@@ -314,7 +314,10 @@ Its tables are built per mass and passed as traced arrays (no recompilation per 
   and that a second mass compiles nothing (`gpu/tests/test_brem_envelope.py`).
 - **A small reproducibility caveat** found by those tests, with either sampler: on CPU, 3-4 of about 126 k brem
   `electron`/`recoil_dm` values differ in the last bit between batch 1/cap 64 and batch 3/cap 8192 (everything
-  upstream is bit-identical); that test uses rtol 1e-15 for those two keys.
+  upstream is bit-identical); that test uses rtol 1e-15 for those two keys. On x86-64 (the CI runner) `prob` also
+  differs, by up to 8.4e-12 relative in about 2 % of the candidates, so the test allows 1e-10 for it; the candidate
+  sets stay identical. An accepted event could in principle change between batch shapes, with probability of order
+  1e-11 per candidate.
 
 ### Eta decay
 
@@ -522,8 +525,9 @@ float64 runs):
 ## Reproducibility
 
 - **Per seed:** results do not depend on the batch size (blocks per device call), the candidate cap or the split
-  into shards; tests check this bit for bit on CPU. Each 2^16-trial block's random numbers depend only on (seed,
-  channel, block).
+  into shards; tests check this bit for bit on CPU. The exception is proton brem, whose `electron`, `recoil_dm`
+  and (on x86-64) `prob` values can differ in the last bits between batch shapes (see the brem envelope section).
+  Each 2^16-trial block's random numbers depend only on (seed, channel, block).
 - **GPU against CPU:** with the stock sampler, the GPU runs give the same number of detector hits and accepted
   events at all eight pi0 points as the CPU run, and `se` within 6e-14 relative. (Brem, eta, `particle_list` and
   off-shell have run on G1 only.)

@@ -115,9 +115,10 @@ def test_envelope_samples_the_stock_law(stem):
 
 
 # The recoil electron (and Recoil_DM = DM - electron) can differ in the last bit between batch/cap shapes on CPU,
-# with either sampler (XLA's codegen of the recoil kinematics depends on the array length); everything upstream,
-# the sampled V and DM included, is bit-identical.
-ULP_KEYS = ("electron", "recoil_dm")
+# with either sampler (XLA's codegen of the recoil kinematics depends on the array length). On x86-64 (the CI
+# runner) prob differs too, by up to 8.4e-12 relative in about 2 % of the candidates. Everything else, the sampled V
+# and DM and the candidate set included, is bit-identical.
+RTOL = {"electron": 1e-15, "recoil_dm": 1e-15, "prob": 1e-10}
 
 
 @pytest.mark.parametrize("sampler", ["stock", "envelope"])
@@ -128,8 +129,8 @@ def test_batch_and_cap_do_not_change_results(sampler):
     assert a["parent_over_bar"] == b["parent_over_bar"] == 0 and a["parent_sampler"] == sampler
     assert len(a["candidates"]["prob"]) > 0
     for k in a["candidates"]:
-        if k in ULP_KEYS:
-            np.testing.assert_allclose(a["candidates"][k], b["candidates"][k], rtol=1e-15, atol=1e-17, err_msg=k)
+        if k in RTOL:
+            np.testing.assert_allclose(a["candidates"][k], b["candidates"][k], rtol=RTOL[k], atol=1e-17, err_msg=k)
         else:
             np.testing.assert_array_equal(a["candidates"][k], b["candidates"][k], err_msg=k)
     c = pipeline.candidates(card, n, seed=12, batch=3, cap=8192, parent_sampler=sampler)["candidates"]
