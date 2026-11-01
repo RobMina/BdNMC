@@ -1,0 +1,33 @@
+Bootstrap: docker
+From: python:3.14-slim-bookworm
+
+# The JAX port of BdNMC (bdnmc_jax) with GPU support, for event generation on any endpoint with an NVIDIA GPU
+# (run with `apptainer exec --nv`) or on a CPU (the same image; JAX falls back to the CPU).
+# jaxlib needs glibc >= 2.27, so this image cannot be an SL7 one; Debian bookworm has glibc 2.36.
+# The CUDA runtime comes with the jax-cuda12 wheels; the host provides only the NVIDIA driver.
+# Build (the user builds images): see gpu/containers/README.md.
+
+%arguments
+    BDNMC_REF=gpu-port
+
+%post
+    apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
+    pip install --no-cache-dir \
+        "jax[cuda12]==0.12.0.1" numpy==2.5.4 scipy==1.18.1 h5py==3.16.0
+    git clone https://github.com/RobMina/BdNMC.git /opt/BdNMC
+    git -C /opt/BdNMC checkout "{{ BDNMC_REF }}"
+    git -C /opt/BdNMC rev-parse HEAD > /opt/BdNMC/COMMIT
+    pip install --no-cache-dir --no-deps /opt/BdNMC/gpu
+
+%environment
+    export XLA_PYTHON_CLIENT_PREALLOCATE=false
+    export BDNMC_HOME=/opt/BdNMC
+
+%runscript
+    exec python /opt/BdNMC/gpu/examples/quickstart.py "$@"
+
+%test
+    python -c "import bdnmc_jax, jax; print('bdnmc_jax', bdnmc_jax.PRECISION, 'jax', jax.__version__, jax.default_backend())"
+
+%labels
+    Description BdNMC JAX port (bdnmc_jax), GPU or CPU
