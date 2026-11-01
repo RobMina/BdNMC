@@ -136,16 +136,20 @@ def _list_channel(ch, parent_sampler, m_meson, vnum, card, dec):
 
 
 def _brem_channel(card, ch, parent_sampler):
-    """V_decay with production_distribution proton_brem (Kinetic_Mixing.cpp:186-198): Vnum = V_prod_rate x POT."""
-    if parent_sampler != "stock":
-        raise NotImplementedError("the envelope sampler is not ported for proton_brem")
+    """V_decay with production_distribution proton_brem (Kinetic_Mixing.cpp:186-198): Vnum = V_prod_rate x POT.
+    With parent_sampler "envelope" the dist is a brem.BremEnvelope and `fmax` holds its per-mass tables (traced
+    arrays of a fixed shape, so a new m_V does not recompile)."""
     if 2 * card.mass_dm >= card.mass_v:
         raise NotImplementedError("V -> chi chi is closed (2 m_chi >= m_V)")
     dist = brem.ProtonBrem(card.beam_energy, ch.zmin, ch.zmax, ch.ptmin, ch.ptmax)
     dist.check()
     vnum = dist.v_prod_rate(card.epsilon, card.mass_v) * card.pot
-    return Channel("Dark_Bremsstrahlung", card.mass_v, dist, float(dist.find_fmax(card.mass_v)), vnum,
-                   card.mass_v, card.mass_dm, kind="brem")
+    if parent_sampler == "envelope":
+        env = brem.BremEnvelope(dist)
+        dist, fmax = env, env.tables(card.mass_v)
+    else:
+        fmax = float(dist.find_fmax(card.mass_v))
+    return Channel("Dark_Bremsstrahlung", card.mass_v, dist, fmax, vnum, card.mass_v, card.mass_dm, kind="brem")
 
 
 def _recoil(sc, key, key_phi, dm, live, u_pos, t_in, t_out, origin=None, max_rounds=10_000):

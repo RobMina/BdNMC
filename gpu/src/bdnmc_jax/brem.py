@@ -8,6 +8,8 @@ Stock behaviours kept, because they set the rate and the kinematics:
 - the V carries z x the beam momentum along z and pT transverse (no rotation to the proton direction).
 Not kept: stock's sampler bar starts at d2N(zmin, ptmin) and is raised whenever exceeded (a running maximum, like
 BMPT's); the port uses a fixed bar from a grid search x a margin and fails if a proposal exceeds it.
+`BremEnvelope` (opt-in, `parent_sampler="envelope"`) samples the same law with a piecewise-constant bound on a (z, pT)
+grid instead of one bar; it draws different random numbers. Its per-mass tables are traced.
 
 The density's constant factors (|F1(m_A^2)|^2, epsilon^2 alpha, 1/sigma_pp(s)) cancel in the accept test, so the
 device sampler uses `shape` = sigma_pp(s') x wpp, with m_A traced (no recompile per mass).
@@ -130,10 +132,122 @@ class ProtonBrem:
         return best * self.margin
 
 
+# --- envelope sampler --------------------------------------------------------------------------------------------
+# Fixed grid shape: the per-mass tables are traced arrays of this shape, so a new m_A changes values, not the
+# compiled program (goal P2).
+ENV_NZ, ENV_NPT = 128, 128
+
+
+@dataclass(frozen=True)
+class EnvelopeTables:
+    """Per-mass tables of a BremEnvelope (traced leaves): cell edges in z (n_z) and pT (n_pt), the bound per cell
+    (row-major, z outer) and the CDF over cells; `efficiency` is the expected acceptance (host diagnostic)."""
+    z_lo: object
+    dz: object
+    pt_lo: object
+    dpt: object
+    bound: object
+    cdf: object
+    efficiency: object
+
+
+jax.tree_util.register_dataclass(EnvelopeTables, data_fields=["z_lo", "dz", "pt_lo", "dpt", "bound", "cdf",
+                                                              "efficiency"], meta_fields=[])
+
+
+@dataclass(frozen=True)
+class BremEnvelope:
+    """Exact rejection sampling of stock's brem law (density `shape` on the (z, pT) window) with a piecewise-constant
+    bound on a (z, pT) grid, as parents.Envelope does for the mesons: choose a cell with probability bound x area,
+    propose uniformly in it, accept with shape / bound. Static part only (window, grid shape, pool); the tables
+    depend on m_A and are passed at sampling time (`EnvelopeTables`, traced). `propose` returns shape / bound, so
+    `rejection` runs with fmax = 1 and counts any shape > bound as over the bar (a failure: the bound missed a
+    peak)."""
+    base: ProtonBrem
+    n_z: int = ENV_NZ
+    n_pt: int = ENV_NPT
+    pool_factor: float = 1.5  # proposals per round / n: fixed (not from the per-mass efficiency) so masses share a compile
+
+    @property
+    def beam_energy(self):
+        return self.base.beam_energy
+
+    def pool(self, n):
+        return -(-int(self.pool_factor * n) // 4096) * 4096
+
+    def propose(self, key, pool, params):
+        mA, t = params
+        u = jax.random.uniform(key, (pool, 3), dtype=rng.FLOAT)
+        cell = jnp.minimum(jnp.searchsorted(t.cdf, u[:, 0], side="right"), self.n_z * self.n_pt - 1)
+        iz, ip = cell // self.n_pt, cell % self.n_pt
+        z = t.z_lo[iz] + u[:, 1] * t.dz[iz]
+        pt = t.pt_lo[ip] + u[:, 2] * t.dpt[ip]
+        f = self.base.shape(z, pt, mA) / t.bound[cell]
+        return jnp.stack([z, pt], axis=-1), jnp.where(jnp.isfinite(f), f, jnp.inf)
+
+    def tables(self, mA, n_sub=6, margin=1.2, n_check=250_000, seed=0):
+        """Build and check the tables for m_A: z in n_z equal bins; pT in n_pt bins equal in log(pT - ptmin + c0),
+        c0 = the smallest pT-free part of wpp's H over the window (the density falls like a power of 1/H). Each
+        cell's bound is the maximum on an n_sub x n_sub sub-grid (edges included) x margin. The CDF is rounded to
+        the device dtype first and the bound recomputed from it, so the cell probabilities the device uses and the
+        bound it divides by agree exactly. Checked on n_check random points chosen like the sampler does; raises if
+        any exceeds its cell's bound. The tables are built per mass, inside every run's setup, so the check is kept
+        small (2e6 points cost about 0.2 s, 2.5e5 about 0.03 s); every proposal is checked against its bound at run
+        time anyway (over_bar, a failure). All evaluations have fixed shapes (no compile for a new mass)."""
+        b = self.base
+        if not (b.zmax > b.zmin and b.ptmax > b.ptmin):
+            raise NotImplementedError(f"envelope needs a window of nonzero area, got z [{b.zmin}, {b.zmax}], "
+                                      f"pT [{b.ptmin}, {b.ptmax}]")
+        z_e = np.linspace(b.zmin, b.zmax, self.n_z + 1)
+        zz = np.linspace(b.zmin, b.zmax, 10_001)
+        width = b.ptmax - b.ptmin
+        c0 = max(b.ptmin + float(np.min((1 - zz) * mA * mA + (zz * mp) ** 2)), 1e-6 * width)
+        pt_e = b.ptmin - c0 + c0 * ((width + c0) / c0) ** np.linspace(0.0, 1.0, self.n_pt + 1)
+        pt_e[0], pt_e[-1] = b.ptmin, b.ptmax
+        s = np.linspace(0.0, 1.0, n_sub)
+        Z = z_e[:-1, None, None, None] + np.diff(z_e)[:, None, None, None] * s[None, None, :, None]
+        P = pt_e[None, :-1, None, None] + np.diff(pt_e)[None, :, None, None] * s[None, None, None, :]
+        Z, P = np.broadcast_arrays(Z, P)
+        f = np.asarray(b.shape(jnp.asarray(Z), jnp.asarray(P), mA), dtype=float)
+        f = np.where(np.isfinite(f), f, 0.0)
+        cmax, cmean = f.max(axis=(2, 3)).ravel(), f.mean(axis=(2, 3)).ravel()
+        area = (np.diff(z_e)[:, None] * np.diff(pt_e)[None, :]).ravel()
+        w = np.maximum(cmax * margin, np.finfo(float).tiny) * area
+        W = w.sum()
+        cdf = np.cumsum(w) / W
+        cdf[-1] = 1.0
+        cdf = cdf.astype(rng.FLOAT)  # what the device searches
+        p_cell = np.diff(np.concatenate([[0.0], cdf.astype(float)]))
+        bound = p_cell * W / area  # the bound those cell probabilities imply (= cmax x margin up to rounding)
+        eff = float((cmean * area).sum() / W)
+        if not (bound >= cmax).all():  # e.g. a cell whose probability rounded to zero: it would never be proposed
+            raise RuntimeError(f"brem envelope: {int((bound < cmax).sum())} cells have a bound below their sub-grid "
+                               f"maximum after rounding the CDF (m_A {mA})")
+        # Check the bound on random points, cell by cell (cells chosen like the sampler does, uniform within).
+        rs = np.random.default_rng(seed)
+        cell = np.minimum(np.searchsorted(cdf, rs.random(n_check).astype(rng.FLOAT), side="right"), len(cdf) - 1)
+        iz, ip = cell // self.n_pt, cell % self.n_pt
+        zc = z_e[iz] + rs.random(n_check) * np.diff(z_e)[iz]
+        pc = pt_e[ip] + rs.random(n_check) * np.diff(pt_e)[ip]
+        ratio = np.asarray(b.shape(jnp.asarray(zc), jnp.asarray(pc), mA), dtype=float) / bound[cell]
+        if not (np.nan_to_num(ratio, nan=0.0) <= 1).all():
+            raise RuntimeError(f"brem envelope bound exceeded on {int((ratio > 1).sum())} of {n_check} check points "
+                               f"(m_A {mA}, max ratio {np.nanmax(ratio):.3f}); raise margin or refine the grid")
+        arr = lambda a: jnp.asarray(a, dtype=rng.FLOAT)  # noqa: E731
+        return EnvelopeTables(arr(z_e[:-1]), arr(np.diff(z_e)), arr(pt_e[:-1]), arr(np.diff(pt_e)), arr(bound),
+                              jnp.asarray(cdf), arr(eff))
+
+
 def sample_block(dist, key, n, fmax, mA, pool=None):
-    """n dark photons (n, 4) for one block (Proton_Brem_Distribution::sample_momentum), with diagnostics."""
-    x, filled, nprop, nover = rng.rejection(jax.random.fold_in(key, rng.PARENT), dist.propose, fmax, n, pool or n,
-                                            params=mA)
+    """n dark photons (n, 4) for one block (Proton_Brem_Distribution::sample_momentum), with diagnostics. `dist` is a
+    ProtonBrem (stock's uniform proposal against the bar `fmax`) or a BremEnvelope (`fmax` = its EnvelopeTables for
+    m_A; the same law)."""
+    if isinstance(dist, BremEnvelope):
+        x, filled, nprop, nover = rng.rejection(jax.random.fold_in(key, rng.PARENT), dist.propose, 1.0, n,
+                                                pool or dist.pool(n), params=(mA, fmax))
+    else:
+        x, filled, nprop, nover = rng.rejection(jax.random.fold_in(key, rng.PARENT), dist.propose, fmax, n,
+                                                pool or n, params=mA)
     z, pt = x[:, 0], x[:, 1]
     phi = 2 * pi * rng.uniform(key, rng.PARENT_PHI, (n,))
     pz = math.sqrt(dist.beam_energy ** 2 - mp * mp) * z

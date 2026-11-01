@@ -1,0 +1,30 @@
+{
+ "_comment": "Pre-declared before the first comparison against stock: V1/V2 of the proton-brem set with parent_sampler=envelope (brem.BremEnvelope). Committed before the jobs start; the result is judged only by the rule below.",
+ "declared": "2026-10-31",
+ "previous_result": {
+  "commit": "9127b57",
+  "parent_sampler": "stock",
+  "result": "pass (V1 max |pull| 1.13, mean pull +0.06, chi2 p 0.90; V2 KS 0.54, min p 6.3e-4, max tail pull 2.70)"
+ },
+ "run": {
+  "commit": "the brem-envelope commit that adds this file (code as in 36eddb7; this commit changes no code)",
+  "parent_sampler": "envelope",
+  "precision": "float64",
+  "seed_offset": 0,
+  "set": "brem (8 points: mb_brem and he_brem_cuboid at m_chi 1, 5, 20, 45 MeV)",
+  "trials": "as validation/run_v_set.sh V_SET=brem (2e7 per point, 4 block-range shards, seed = the reference card's seed + offset)",
+  "gpu": "one V100 (UVA gpu partition)",
+  "criteria": "validation/v_config_brem.json, unchanged (sha256 3a8d5c3eef3c602c1400d5aa710f4c2ef3979de29ad498ea36c3275bb46cbff4), via compare_v.py --config validation/v_config_brem.json",
+  "reference": "the same stock reference sets as every earlier brem run (phase0/out/ref, ref_w and the base cards' O2 runs)"
+ },
+ "decision_rule": {
+  "envelope_validated_for_brem_if_all": [
+   "the run passes every V1 and V2 criterion of v_config_brem.json",
+   "parent_over_bar = 0 in every shard (no envelope bound violation), and no shard fails a sampler check"
+  ],
+  "repeat": "only if the run fails: one repeat with seed_offset 1000000 (same commit, sampler, trials and GPU type), judged by the same two conditions; the envelope is then validated for brem only if the repeat meets both",
+  "no_third_run": "a third run to obtain a pass is not allowed under this rule; it would need a new declaration with reasons",
+  "infrastructure": "a shard that did not complete for a reason outside the port (node failure, time limit, preemption) is rerun with the same commit and seed; a shard stopped by a sampler check (over the bar, out of rounds) counts as a failure of the run",
+  "reporting": "every run under this rule is reported whatever the outcome"
+ }
+}
